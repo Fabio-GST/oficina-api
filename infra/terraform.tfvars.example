@@ -1,0 +1,16 @@
+# Copie para terraform.tfvars (ignorado pelo git) e troque os valores.
+nome_cluster   = "oficina"
+senha_banco    = "troque-a-senha-do-banco"
+app_key        = "troque-por-32-caracteres-aleatorios"
+jwt_secret     = "troque-este-segredo-em-producao"
+webhook_secret = "troque-este-segredo-de-webhook"
+
+# Opcional — apenas com NOTIFICACAO_DRIVER=email:
+# smtp = {
+#   host             = "smtp.mailtrap.io"
+#   port             = "587"
+#   user             = "usuario"
+#   password         = "senha"
+#   mail_from        = "oficina@exemplo.com"
+#   email_almoxarife = "almoxarife@exemplo.com"
+# }

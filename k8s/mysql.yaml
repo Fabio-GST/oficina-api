@@ -1,0 +1,71 @@
+# Banco MySQL para o cluster (1 réplica com volume persistente).
+# Em cloud, prefira um banco gerenciado (ex.: RDS) provisionado via Terraform —
+# neste caso basta apontar DB_HOST no ConfigMap e não aplicar este manifesto.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: oficina
+spec:
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: oficina
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: oficina-secrets
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: oficina-config
+                  key: DB_DATABASE
+          readinessProbe:
+            exec:
+              command: ['sh', '-c', 'mysqladmin ping -h 127.0.0.1 -p"$MYSQL_ROOT_PASSWORD"']
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: '1'
+              memory: 1Gi
+          volumeMounts:
+            - name: dados
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: dados
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources:
+          requests:
+            storage: 2Gi

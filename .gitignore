@@ -1,0 +1,43 @@
+# Dependencies and AdonisJS build
+node_modules
+build
+build-cov
+tmp
+
+# Test coverage
+coverage
+.nyc_output
+
+# SonarQube scanner
+.scannerwork
+
+# Secrets
+.env
+.env.local
+.env.production.local
+.env.development.local
+k8s/secret.yaml
+
+# Terraform
+infra/.terraform
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars
+
+# Frontend assets compiled code
+public/assets
+
+# Build tools specific
+npm-debug.log
+yarn-error.log
+
+# Editors specific
+.fleet
+.idea
+.vscode
+
+# Platform specific
+.DS_Store
+
+# kubeconfig gerado pelo Terraform (credenciais do cluster)
+infra/oficina-config
