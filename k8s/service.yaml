@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: oficina-api
+  namespace: oficina
+spec:
+  type: ClusterIP
+  selector:
+    app: oficina-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3333
+# Acesso local (kind/minikube):
+#   kubectl -n oficina port-forward svc/oficina-api 3333:80
+# Em cloud, exponha via Ingress ou Service type LoadBalancer.
