@@ -1,0 +1,40 @@
+# Integração Contínua: lint, typecheck, testes e build a cada PR/push.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  qualidade:
+    name: Lint, testes e build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # test:ci chama o entrypoint do Japa diretamente — o wrapper `node ace
+      # test` retorna exit code errado em alguns ambientes. Os testes usam
+      # SQLite em memória (.env.test), sem serviços externos.
+      - name: Testes (unit + integration + functional)
+        run: npm run test:ci
+
+      - name: Build da aplicação
+        run: npm run build

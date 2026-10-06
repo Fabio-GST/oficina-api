@@ -1,0 +1,101 @@
+# Entrega Contínua: build/push da imagem Docker no GHCR e deploy no cluster
+# Kubernetes (aplicação dos manifestos + Job de migração do banco).
+#
+# O job de deploy só roda quando a variável de repositório DEPLOY_HABILITADO
+# for "true" E o secret KUBE_CONFIG (kubeconfig em base64) estiver configurado.
+# Para cluster local (kind), use um runner self-hosted na mesma máquina ou
+# exponha o cluster; sem isso, o pipeline entrega a imagem e para por aí.
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+env:
+  # minúsculas: tags Docker não aceitam maiúsculas do repository_owner (Fabio-GST)
+  IMAGEM: ghcr.io/fabio-gst/oficina-api
+
+jobs:
+  imagem:
+    name: Build e push da imagem
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGEM }}:latest
+            ${{ env.IMAGEM }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy no Kubernetes
+    needs: imagem
+    if: vars.DEPLOY_HABILITADO == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configurar acesso ao cluster
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Apontar manifestos para a imagem publicada
+        run: |
+          sed -i "s|ghcr.io/fabio-gst/oficina-api:latest|${IMAGEM}:${{ github.sha }}|" \
+            k8s/deployment.yaml k8s/migration-job.yaml
+
+      - name: Namespace e configuração
+        run: kubectl apply -f k8s/namespace.yaml -f k8s/configmap.yaml
+
+      - name: Secret da aplicação (a partir dos GitHub Secrets)
+        run: |
+          kubectl -n oficina create secret generic oficina-secrets \
+            --from-literal=APP_KEY='${{ secrets.APP_KEY }}' \
+            --from-literal=JWT_SECRET='${{ secrets.JWT_SECRET }}' \
+            --from-literal=WEBHOOK_SECRET='${{ secrets.WEBHOOK_SECRET }}' \
+            --from-literal=DB_PASSWORD='${{ secrets.DB_PASSWORD }}' \
+            --from-literal=MYSQL_ROOT_PASSWORD='${{ secrets.DB_PASSWORD }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Banco de dados
+        run: |
+          kubectl apply -f k8s/mysql.yaml
+          kubectl -n oficina rollout status statefulset/mysql --timeout=180s
+
+      - name: Migração do banco
+        run: |
+          kubectl -n oficina delete job oficina-migracao --ignore-not-found
+          kubectl apply -f k8s/migration-job.yaml
+          kubectl -n oficina wait --for=condition=complete job/oficina-migracao --timeout=180s
+
+      - name: API, Service e HPA
+        run: |
+          kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml -f k8s/hpa.yaml
+          kubectl -n oficina rollout status deployment/oficina-api --timeout=180s

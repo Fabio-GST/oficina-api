@@ -1,0 +1,56 @@
+# API da oficina. A imagem é publicada pelo pipeline de CD no GHCR — ajuste o
+# campo `image` para o seu usuário/organização do GitHub.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-api
+  namespace: oficina
+  labels:
+    app: oficina-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: oficina-api
+  template:
+    metadata:
+      labels:
+        app: oficina-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/fabio-gst/oficina-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3333
+          envFrom:
+            - configMapRef:
+                name: oficina-config
+            - secretRef:
+                name: oficina-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3333
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3333
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+          # Requests/limits são OBRIGATÓRIOS para o HPA calcular a utilização.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000 # usuário "node" da imagem base (UID numérico p/ o kubelet validar)
+            allowPrivilegeEscalation: false

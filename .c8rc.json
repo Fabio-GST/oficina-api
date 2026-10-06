@@ -1,0 +1,17 @@
+{
+  "all": true,
+  "include": [
+    "app/modulos/ordens-servico/dominio/**",
+    "app/modulos/estoque/dominio/**",
+    "app/modulos/clientes/dominio/objetos-de-valor/**",
+    "app/modulos/veiculos/dominio/objetos-de-valor/**",
+    "app/shared/dominio/objetos-de-valor/**"
+  ],
+  "exclude": ["**/*.d.ts", "**/dominio/repositorios/**", "**/dominio/eventos/**"],
+  "reporter": ["text", "html", "lcov"],
+  "check-coverage": true,
+  "lines": 80,
+  "functions": 80,
+  "branches": 80,
+  "statements": 80
+}

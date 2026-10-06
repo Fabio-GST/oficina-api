@@ -1,0 +1,33 @@
+# Job de migração do banco: roda a cada deploy (o CD deleta o Job anterior e
+# reaplica). Usa a mesma imagem da API.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: oficina-migracao
+  namespace: oficina
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: oficina-migracao
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migracao
+          image: ghcr.io/fabio-gst/oficina-api:latest
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'node ace migration:run --force && node ace db:seed']
+          envFrom:
+            - configMapRef:
+                name: oficina-config
+            - secretRef:
+                name: oficina-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

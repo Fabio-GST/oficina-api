@@ -1,0 +1,84 @@
+{
+  "name": "backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node bin/server.js",
+    "build": "node ace build",
+    "dev": "node ace serve --hmr",
+    "test": "node ace test",
+    "test:ci": "node --import=ts-node-maintained/register/esm bin/test.ts",
+    "test:unit": "node ace test unit",
+    "test:integration": "node ace test integration",
+    "test:functional": "node ace test functional",
+    "test:coverage": "c8 node ace test unit",
+    "coverage:sonar": "node scripts/gerar-cobertura.mjs",
+    "sonar": "docker compose -f docker-compose.sonar.yml --profile scan run --rm scanner",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit"
+  },
+  "imports": {
+    "#exceptions/*": "./app/exceptions/*.js",
+    "#middleware/*": "./app/middleware/*.js",
+    "#providers/*": "./providers/*.js",
+    "#database/*": "./database/*.js",
+    "#start/*": "./start/*.js",
+    "#tests/*": "./tests/*.js",
+    "#config/*": "./config/*.js",
+    "#shared/*": "./app/shared/*.js",
+    "#modulos/*": "./app/modulos/*.js",
+    "#politicas/*": "./app/politicas/*.js"
+  },
+  "devDependencies": {
+    "@adonisjs/assembler": "^7.8.2",
+    "@adonisjs/eslint-config": "^2.0.0",
+    "@adonisjs/prettier-config": "^1.4.4",
+    "@adonisjs/tsconfig": "^1.4.0",
+    "@japa/api-client": "^3.1.0",
+    "@japa/assert": "^4.0.1",
+    "@japa/plugin-adonisjs": "^4.0.0",
+    "@japa/runner": "^4.2.0",
+    "@swc/core": "1.11.24",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/luxon": "^3.7.2",
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.1",
+    "better-sqlite3": "^12.11.1",
+    "c8": "^11.0.0",
+    "eslint": "^9.26.0",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^7.2.0",
+    "hot-hook": "^0.4.0",
+    "pino-pretty": "^13.0.0",
+    "prettier": "^3.5.3",
+    "ts-node-maintained": "^10.9.5",
+    "typescript": "~5.8"
+  },
+  "dependencies": {
+    "@adonisjs/auth": "^9.4.0",
+    "@adonisjs/core": "^6.18.0",
+    "@adonisjs/cors": "^2.2.1",
+    "@adonisjs/lucid": "^21.6.1",
+    "@vinejs/vine": "^3.0.1",
+    "adonis-autoswagger": "^3.73.0",
+    "jsonwebtoken": "^9.0.3",
+    "luxon": "^3.7.2",
+    "mysql2": "^3.22.5",
+    "nodemailer": "^9.0.3",
+    "reflect-metadata": "^0.2.2"
+  },
+  "hotHook": {
+    "boundaries": [
+      "./app/modulos/**/interface-adapters/controllers/**/*.ts",
+      "./app/middleware/*.ts"
+    ]
+  },
+  "prettier": "@adonisjs/prettier-config"
+}

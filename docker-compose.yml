@@ -1,0 +1,49 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: oficina-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: oficina
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-proot']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    container_name: oficina-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      TZ: UTC
+      HOST: 0.0.0.0
+      PORT: 3333
+      NODE_ENV: production
+      LOG_LEVEL: info
+      APP_KEY: ${APP_KEY:-5QcFzkjXRmBRasyG0-jwp2TK64sZVTIz}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_DATABASE: oficina
+      JWT_SECRET: ${JWT_SECRET:-troque-este-segredo-em-producao}
+      JWT_EXPIRES_IN: 1h
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-troque-este-segredo-de-webhook}
+      # "log" para dev; "email" exige as variáveis SMTP_* (ver .env.example).
+      NOTIFICACAO_DRIVER: ${NOTIFICACAO_DRIVER:-log}
+    ports:
+      - '3333:3333'
+    # Aplica migrations, popula dados de exemplo e sobe a API.
+    command: sh -c "node ace migration:run --force && node ace db:seed && node bin/server.js"
+
+volumes:
+  mysql_data:
