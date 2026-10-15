@@ -1,0 +1,7 @@
+# Homologação roda com o mínimo para poupar o crédito do Learner Lab.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-api
+spec:
+  replicas: 1

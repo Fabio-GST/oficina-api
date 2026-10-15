@@ -1,0 +1,20 @@
+# Exposição da API dentro da VPC por um Network Load Balancer INTERNO,
+# provisionado pelo cloud-controller do EKS (in-tree, sem AWS Load Balancer
+# Controller — que exigiria IRSA, indisponível no Learner Lab). O API Gateway
+# (repo oficina-infra-k8s) alcança este NLB por um VPC Link; a API não fica
+# exposta à internet diretamente.
+apiVersion: v1
+kind: Service
+metadata:
+  name: oficina-api
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-internal: 'true'
+spec:
+  type: LoadBalancer
+  selector:
+    app: oficina-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,21 @@
+# Produção: branch `main` → namespace `oficina-prod` (criado pelo repo
+# oficina-infra-k8s). O CD troca a tag da imagem pelo SHA do commit.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: oficina-prod
+
+labels:
+  - includeSelectors: false
+    pairs:
+      oficina/ambiente: prod
+
+resources:
+  - ../../base
+
+images:
+  - name: ghcr.io/fabio-gst/oficina-api
+    newTag: prod
+
+patches:
+  - path: configmap-patch.yaml
