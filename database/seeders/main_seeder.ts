@@ -4,6 +4,7 @@ import { servicoDeHash } from '#shared/frameworks-drivers/hash/servico-de-hash-a
 import UsuarioModel from '#modulos/autenticacao/frameworks-drivers/models/usuario_model'
 import ServicoModel from '#modulos/servicos/frameworks-drivers/models/servico_model'
 import PecaModel from '#modulos/estoque/frameworks-drivers/models/peca_model'
+import ClienteModel from '#modulos/clientes/frameworks-drivers/models/cliente_model'
 
 export default class extends BaseSeeder {
   async run() {
@@ -26,6 +27,21 @@ export default class extends BaseSeeder {
     ]
     for (const servico of servicos) {
       await ServicoModel.updateOrCreate({ nome: servico.nome }, { id: randomUUID(), ...servico })
+    }
+
+    // Clientes de demonstração (CPFs válidos pelos dígitos verificadores) para
+    // o login por CPF na Function de autenticação. O último é inativo, para
+    // demonstrar a recusa do token.
+    const clientes = [
+      { nome: 'Maria Silva', documento: '11144477735', email: 'maria@exemplo.com', ativo: true },
+      { nome: 'João Souza', documento: '52998224725', email: 'joao@exemplo.com', ativo: true },
+      { nome: 'Carlos Inativo', documento: '12345678909', email: null, ativo: false },
+    ]
+    for (const cliente of clientes) {
+      await ClienteModel.updateOrCreate(
+        { documento: cliente.documento },
+        { id: randomUUID(), tipoDocumento: 'CPF', telefone: null, ...cliente }
+      )
     }
 
     // Peças/insumos de exemplo com estoque inicial.

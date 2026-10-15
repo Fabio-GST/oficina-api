@@ -8,6 +8,7 @@ interface PropsCliente {
   documento: Documento
   telefone?: string | null
   email?: string | null
+  ativo?: boolean
 }
 
 /** Cliente da oficina. Aggregate root do contexto de Clientes. */
@@ -16,6 +17,7 @@ export class Cliente extends RaizAgregado {
   private _documento: Documento
   private _telefone: string | null
   private _email: string | null
+  private _ativo: boolean
 
   private constructor(props: PropsCliente) {
     super(props.id)
@@ -23,6 +25,7 @@ export class Cliente extends RaizAgregado {
     this._documento = props.documento
     this._telefone = props.telefone ?? null
     this._email = props.email ?? null
+    this._ativo = props.ativo ?? true
   }
 
   static criar(props: Omit<PropsCliente, 'id'>): Cliente {
@@ -35,10 +38,25 @@ export class Cliente extends RaizAgregado {
     return new Cliente(props)
   }
 
-  atualizar(dados: { nome?: string; telefone?: string | null; email?: string | null }): void {
+  atualizar(dados: {
+    nome?: string
+    telefone?: string | null
+    email?: string | null
+    ativo?: boolean
+  }): void {
     if (dados.nome !== undefined) this._nome = dados.nome
     if (dados.telefone !== undefined) this._telefone = dados.telefone
     if (dados.email !== undefined) this._email = dados.email
+    if (dados.ativo !== undefined) this._ativo = dados.ativo
+  }
+
+  /** Bloqueia o cliente: a autenticação por CPF passa a recusá-lo. */
+  inativar(): void {
+    this._ativo = false
+  }
+
+  reativar(): void {
+    this._ativo = true
   }
 
   get nome(): string {
@@ -55,5 +73,9 @@ export class Cliente extends RaizAgregado {
 
   get email(): string | null {
     return this._email
+  }
+
+  get ativo(): boolean {
+    return this._ativo
   }
 }
