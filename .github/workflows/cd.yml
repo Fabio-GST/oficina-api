@@ -120,16 +120,19 @@ jobs:
       # cluster: credenciais do RDS vêm do Secrets Manager (repo oficina-infra-db)
       # e as chaves da aplicação dos secrets do GitHub (environment hml/prod).
       # JWT_SECRET deve ser o MESMO usado pela Function de autenticação por CPF.
+      # NEW_RELIC_LICENSE_KEY é opcional: vazio desliga o agente APM (RFC 0004).
       - name: Secret da aplicação (Secrets Manager + GitHub Secrets)
         env:
           NAMESPACE: ${{ steps.infra.outputs.namespace }}
           APP_KEY: ${{ secrets.APP_KEY }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
         run: |
           set -euo pipefail
           test -n "$APP_KEY" || { echo "::error::secret APP_KEY ausente no environment ${AMBIENTE}"; exit 1; }
           test -n "$JWT_SECRET" || { echo "::error::secret JWT_SECRET ausente no environment ${AMBIENTE}"; exit 1; }
+          test -n "$NEW_RELIC_LICENSE_KEY" || echo "::warning::secret NEW_RELIC_LICENSE_KEY ausente no environment ${AMBIENTE}: agente New Relic desligado"
 
           BANCO=$(aws secretsmanager get-secret-value --secret-id "oficina/${AMBIENTE}/db" --query SecretString --output text)
           for chave in DB_HOST DB_PORT DB_DATABASE DB_USER DB_PASSWORD; do
@@ -147,6 +150,7 @@ jobs:
             --from-literal=APP_KEY="$APP_KEY" \
             --from-literal=JWT_SECRET="$JWT_SECRET" \
             --from-literal=WEBHOOK_SECRET="${WEBHOOK_SECRET}" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="${NEW_RELIC_LICENSE_KEY}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apontar o overlay para a imagem publicada

@@ -65,6 +65,17 @@ export default defineConfig({
 
   /*
   |--------------------------------------------------------------------------
+  | Meta files
+  |--------------------------------------------------------------------------
+  |
+  | Arquivos copiados para a pasta build sem passar pelo compilador. O
+  | newrelic.cjs é lido pelo agente a partir do diretório de trabalho (/app).
+  |
+  */
+  metaFiles: [{ pattern: 'newrelic.cjs', reloadServer: false }],
+
+  /*
+  |--------------------------------------------------------------------------
   | Tests
   |--------------------------------------------------------------------------
   |

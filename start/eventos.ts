@@ -17,12 +17,15 @@
 |   ordem-servico.veiculo-entregue → avisar cliente
 |   pagamento.confirmado         → emitir Nota Fiscal (assíncrono)
 |   estoque.abaixo-do-minimo     → alertar almoxarife + solicitar compra
+|   ordem-servico.aberta         → telemetria: OrdemServicoCriada
+|   ordem-servico.* (transições) → telemetria: OrdemServicoMudouStatus
 |
 */
 
 import app from '@adonisjs/core/services/app'
 import { barramentoDeEventos } from '#shared/frameworks-drivers/eventos/barramento-de-eventos'
 import { servicoDeNotificacao } from '#shared/frameworks-drivers/notificacao/fabrica'
+import { telemetria } from '#shared/frameworks-drivers/telemetria/fabrica'
 import { DetalharOrdem } from '#modulos/ordens-servico/use-cases/consultas'
 import { ObterCliente } from '#modulos/clientes/use-cases/obter-cliente'
 import { UtilizarPeca } from '#modulos/estoque/use-cases/utilizar-peca'
@@ -36,6 +39,10 @@ import { GerarCobrancaAoFinalizar } from '#politicas/gerar-cobranca-ao-finalizar
 import { EmitirNotaAoConfirmarPagamento } from '#politicas/emitir-nota-ao-confirmar-pagamento'
 import { SolicitarCompraAoAtingirMinimo } from '#politicas/solicitar-compra-ao-atingir-minimo'
 import { NotificarClienteSobreOS } from '#politicas/notificar-cliente-sobre-os'
+import {
+  RegistrarCriacaoDaOS,
+  RegistrarMudancaDeStatusDaOS,
+} from '#politicas/registrar-telemetria-da-os'
 
 /** Resolve o caso de uso no container e executa-o com a entrada dada. */
 async function executar<E extends unknown[], S>(
@@ -103,4 +110,20 @@ for (const [evento, mensagem] of AVISOS_DE_STATUS) {
   barramentoDeEventos.registrar(
     new NotificarClienteSobreOS(evento, mensagem, servicoDeNotificacao, destinatarioDaOrdem)
   )
+}
+
+// Observabilidade (RFC 0004): eventos de negócio para os dashboards do New
+// Relic. Volume diário de OS e tempo por status (derivado do histórico).
+barramentoDeEventos.registrar(new RegistrarCriacaoDaOS(telemetria))
+
+const TRANSICOES_DE_STATUS = [
+  'ordem-servico.diagnostico-iniciado',
+  'ordem-servico.orcamento-gerado',
+  'ordem-servico.aprovada',
+  'ordem-servico.recusada',
+  'ordem-servico.finalizada',
+  'ordem-servico.veiculo-entregue',
+]
+for (const evento of TRANSICOES_DE_STATUS) {
+  barramentoDeEventos.registrar(new RegistrarMudancaDeStatusDaOS(evento, detalharOrdem, telemetria))
 }

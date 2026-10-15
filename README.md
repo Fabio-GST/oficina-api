@@ -112,6 +112,7 @@ para aprovação manual) e configure em cada um:
 | `APP_KEY` | 32+ caracteres aleatórios (`node ace generate:key`) |
 | `JWT_SECRET` | Segredo HS256 — **o mesmo** configurado na Function `oficina-auth-lambda` do ambiente |
 | `WEBHOOK_SECRET` | Segredo do webhook de decisão de orçamento |
+| `NEW_RELIC_LICENSE_KEY` | *Ingest license key* da conta New Relic (opcional: vazio desliga o agente APM) — ver [Observabilidade](#observabilidade-new-relic-correlação-e-healthcheck) |
 
 As credenciais do banco (`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USER`, `DB_PASSWORD`) **não**
 ficam no GitHub: o CD as lê do Secrets Manager `oficina/<ambiente>/db`, publicado pelo
@@ -391,7 +392,22 @@ curl -X POST http://localhost:3333/auth/login \
 
 ---
 
-## Observabilidade: correlação e healthcheck
+## Observabilidade: New Relic, correlação e healthcheck
+
+Plataforma: **New Relic** ([RFC 0004](./docs/rfc/0004-observabilidade.md)). Dashboards
+importáveis, consultas NRQL e as condições de alerta estão em
+[`docs/observabilidade/`](./docs/observabilidade/README.md).
+
+- **APM**: o agente `newrelic` é carregado antes da aplicação
+  (`NODE_OPTIONS="-r newrelic --import newrelic/esm-loader.mjs"` no ConfigMap) com a configuração
+  de [`newrelic.cjs`](./newrelic.cjs): app `oficina-api-<amb>` (`NEW_RELIC_APP_NAME`) e traces
+  distribuídos. Sem `NEW_RELIC_LICENSE_KEY` (local e testes) o agente **não inicia**.
+- **Eventos de negócio** (porta `Telemetria`, no-op nos testes): `OrdemServicoCriada` ao abrir a
+  OS, `OrdemServicoMudouStatus { de, para, duracaoMs }` a cada transição (derivado de
+  `historico_status_os`) e `IntegracaoFalhou { integracao: email | webhook, erro }` quando o
+  SMTP ou o webhook de orçamento falham — publicados pelas Políticas e adaptadores existentes.
+- **Logs com `trace.id`**: `@newrelic/pino-enricher` acrescenta `trace.id`/`span.id` às linhas JSON
+  do pino, coletadas pelo `nri-bundle` do cluster (repo `oficina-infra-k8s`).
 
 - **`x-request-id`**: cada requisição recebe um id de correlação. Se o header vier do API
   Gateway (ou de qualquer cliente) ele é reaproveitado; caso contrário a API gera um UUID. O id
