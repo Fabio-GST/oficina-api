@@ -24,7 +24,7 @@ k8s/
 
 | Arquivo (base)       | Recurso                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `configmap.yaml`     | Config não sensível (`oficina-config`): porta, log, driver de notificação                                      |
+| `configmap.yaml`     | Config não sensível (`oficina-config`): porta, log, driver de notificação, `NODE_OPTIONS` (agente New Relic) e `NEW_RELIC_APP_NAME` |
 | `deployment.yaml`    | Deployment da API: probes `/health` (liveness) e `/health/ready` (readiness com banco), requests/limits        |
 | `service.yaml`       | Service `type: LoadBalancer` com anotações de **NLB interno** — alvo do VPC Link do API Gateway                |
 | `hpa.yaml`           | HPA 2–5 réplicas por CPU (70%) e memória (80%)                                                                 |
@@ -33,7 +33,7 @@ k8s/
 O **Secret `oficina-secrets` não é versionado**: o pipeline de CD o monta a cada
 deploy a partir do AWS Secrets Manager (`oficina/<ambiente>/db`: `DB_HOST`,
 `DB_PORT`, `DB_DATABASE`, `DB_USER`, `DB_PASSWORD`) e dos secrets do GitHub
-(`APP_KEY`, `JWT_SECRET`, `WEBHOOK_SECRET`). Sem IRSA/External Secrets no
+(`APP_KEY`, `JWT_SECRET`, `WEBHOOK_SECRET` e `NEW_RELIC_LICENSE_KEY`, opcional). Sem IRSA/External Secrets no
 Learner Lab, essa é a forma de levar o segredo ao cluster sem gravá-lo no git.
 
 ## Renderizando e validando localmente
@@ -63,7 +63,7 @@ kubectl -n $NS create secret generic oficina-secrets \
   --from-literal=DB_DATABASE="$(echo "$SEGREDO" | jq -r .DB_DATABASE)" \
   --from-literal=DB_USER="$(echo "$SEGREDO" | jq -r .DB_USER)" \
   --from-literal=DB_PASSWORD="$(echo "$SEGREDO" | jq -r .DB_PASSWORD)" \
-  --from-literal=APP_KEY="$APP_KEY" --from-literal=JWT_SECRET="$JWT_SECRET" --from-literal=WEBHOOK_SECRET="$WEBHOOK_SECRET" \
+  --from-literal=APP_KEY="$APP_KEY" --from-literal=JWT_SECRET="$JWT_SECRET" --from-literal=WEBHOOK_SECRET="$WEBHOOK_SECRET"   --from-literal=NEW_RELIC_LICENSE_KEY="$NEW_RELIC_LICENSE_KEY" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 

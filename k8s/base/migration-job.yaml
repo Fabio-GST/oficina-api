@@ -23,6 +23,10 @@ spec:
                 name: oficina-config
             - secretRef:
                 name: oficina-secrets
+          # O Job é efêmero: não vale a pena registrá-lo como app no New Relic.
+          env:
+            - name: NEW_RELIC_ENABLED
+              value: 'false'
           resources:
             requests:
               cpu: 100m

@@ -1,0 +1,579 @@
+{
+  "name": "Oficina — Tech Challenge Fase 3",
+  "description": "RFC 0004: latência da API, CPU/memória do EKS, volume e tempo de OS, falhas de integração, logs correlacionados.",
+  "permissions": "PUBLIC_READ_WRITE",
+  "pages": [
+    {
+      "name": "API",
+      "widgets": [
+        {
+          "title": "Latência p50/p95 por rota (ms)",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 8,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT percentile(duration * 1000, 50, 95) FROM Transaction WHERE appName LIKE 'oficina-api-%' FACET request.uri TIMESERIES AUTO"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Apdex",
+          "layout": {
+            "column": 9,
+            "row": 1,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT apdex(duration, t: 0.5) FROM Transaction WHERE appName LIKE 'oficina-api-%'"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "thresholds": [
+              {
+                "alertSeverity": "CRITICAL",
+                "value": 0.7
+              }
+            ]
+          }
+        },
+        {
+          "title": "Throughput (req/min)",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT rate(count(*), 1 minute) FROM Transaction WHERE appName LIKE 'oficina-api-%' FACET appName TIMESERIES AUTO"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Taxa de erro em /work-orders (%)",
+          "layout": {
+            "column": 7,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT percentage(count(*), WHERE error IS true) FROM Transaction WHERE appName LIKE 'oficina-api-%' AND (request.uri LIKE '/work-orders%' OR request.uri LIKE '/me/work-orders%') TIMESERIES AUTO"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Erros por rota",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM TransactionError WHERE appName LIKE 'oficina-api-%' FACET request.uri, error.class SINCE 1 day ago"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Consultas MySQL mais lentas",
+          "layout": {
+            "column": 7,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT average(databaseDuration * 1000) AS 'ms', count(*) FROM Transaction WHERE appName LIKE 'oficina-api-%' AND databaseDuration IS NOT NULL FACET name SINCE 1 day ago LIMIT 10"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Kubernetes",
+      "widgets": [
+        {
+          "title": "CPU por pod (cores)",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT average(cpuUsedCores) FROM K8sContainerSample WHERE clusterName = 'oficina' AND namespaceName LIKE 'oficina-%' FACET podName TIMESERIES AUTO"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Memória por pod (MB)",
+          "layout": {
+            "column": 7,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT average(memoryWorkingSetBytes) / 1e6 FROM K8sContainerSample WHERE clusterName = 'oficina' AND namespaceName LIKE 'oficina-%' FACET podName TIMESERIES AUTO"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "CPU e memória dos nós (%)",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT average(cpuUsedCores / allocatableCpuCores * 100) AS 'CPU %', average(memoryWorkingSetBytes / allocatableMemoryBytes * 100) AS 'Memória %' FROM K8sNodeSample WHERE clusterName = 'oficina' FACET nodeName TIMESERIES AUTO"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Réplicas da API (HPA)",
+          "layout": {
+            "column": 7,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT latest(podsAvailable) AS 'disponíveis', latest(podsDesired) AS 'desejadas' FROM K8sDeploymentSample WHERE clusterName = 'oficina' AND deploymentName = 'oficina-api' FACET namespaceName TIMESERIES AUTO"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Reinícios de containers",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT max(restartCount) FROM K8sContainerSample WHERE clusterName = 'oficina' AND namespaceName LIKE 'oficina-%' FACET podName SINCE 1 day ago"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Pods fora de Running",
+          "layout": {
+            "column": 7,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT latest(status), latest(reason) FROM K8sPodSample WHERE clusterName = 'oficina' AND namespaceName LIKE 'oficina-%' AND status != 'Running' FACET podName SINCE 1 hour ago"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Negócio (OS)",
+      "widgets": [
+        {
+          "title": "Volume diário de OS",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 8,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM OrdemServicoCriada WHERE appName LIKE 'oficina-api-%' TIMESERIES 1 day SINCE 30 days ago"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "OS criadas hoje",
+          "layout": {
+            "column": 9,
+            "row": 1,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM OrdemServicoCriada WHERE appName LIKE 'oficina-api-%' SINCE today"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Tempo médio por status (min)",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT average(duracaoMs) / 60000 FROM OrdemServicoMudouStatus WHERE appName LIKE 'oficina-api-%' FACET de SINCE 7 days ago"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Transições de status",
+          "layout": {
+            "column": 7,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*), average(duracaoMs) / 60000 AS 'min' FROM OrdemServicoMudouStatus WHERE appName LIKE 'oficina-api-%' FACET de, para SINCE 7 days ago"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Falhas de integração",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM IntegracaoFalhou WHERE appName LIKE 'oficina-api-%' FACET integracao TIMESERIES AUTO SINCE 1 day ago"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Últimas falhas de integração",
+          "layout": {
+            "column": 7,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT timestamp, integracao, erro FROM IntegracaoFalhou WHERE appName LIKE 'oficina-api-%' SINCE 1 day ago LIMIT 50"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logs e traces",
+      "widgets": [
+        {
+          "title": "Logs por nível",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM Log WHERE cluster_name = 'oficina' AND namespace_name LIKE 'oficina-%' FACET level TIMESERIES AUTO"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Erros nos logs",
+          "layout": {
+            "column": 7,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT timestamp, message, request_id, trace.id FROM Log WHERE cluster_name = 'oficina' AND level IN ('error','fatal','50','60') SINCE 1 hour ago LIMIT 50"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Requisições com trace (correlação)",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 12,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT timestamp, request_id, trace.id, rota, status, duracaoMs FROM Log WHERE cluster_name = 'oficina' AND message = 'requisicao concluida' SINCE 30 minutes ago LIMIT 50"
+              }
+            ],
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

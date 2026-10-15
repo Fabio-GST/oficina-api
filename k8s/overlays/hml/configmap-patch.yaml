@@ -5,3 +5,4 @@ metadata:
 data:
   LOG_LEVEL: 'debug'
   NOTIFICACAO_DRIVER: 'log'
+  NEW_RELIC_APP_NAME: 'oficina-api-hml'

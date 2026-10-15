@@ -3,6 +3,7 @@ import env from '#start/env'
 import type { ServicoDeNotificacao } from '#shared/use-cases/servico-de-notificacao'
 import { ServicoDeNotificacaoLog } from './servico-de-notificacao-log.js'
 import { ServicoDeNotificacaoEmail } from './servico-de-notificacao-email.js'
+import { telemetria } from '#shared/frameworks-drivers/telemetria/fabrica'
 
 /**
  * Seleciona a implementação da porta de notificação pela configuração:
@@ -21,10 +22,14 @@ function criarServicoDeNotificacao(): ServicoDeNotificacao {
     auth: usuario ? { user: usuario, pass: env.get('SMTP_PASSWORD') } : undefined,
   })
 
-  return new ServicoDeNotificacaoEmail(transporte, {
-    remetente: env.get('MAIL_FROM', 'oficina@localhost'),
-    emailAlmoxarife: env.get('EMAIL_ALMOXARIFE'),
-  })
+  return new ServicoDeNotificacaoEmail(
+    transporte,
+    {
+      remetente: env.get('MAIL_FROM', 'oficina@localhost'),
+      emailAlmoxarife: env.get('EMAIL_ALMOXARIFE'),
+    },
+    telemetria
+  )
 }
 
 export const servicoDeNotificacao = criarServicoDeNotificacao()
