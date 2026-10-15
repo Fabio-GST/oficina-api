@@ -38,6 +38,20 @@ export default class VeiculosController {
   }
 
   /**
+   * @meus
+   * @tag Portal do Cliente
+   * @summary Lista os veículos do cliente autenticado por CPF
+   * @description Requer JWT de **cliente** (`papel: cliente`), emitido pela Function Serverless em `POST /auth/cpf`. O cliente é identificado pela claim `sub` do token.
+   * @responseBody 200 - [{"id":"uuid","clienteId":"uuid","placa":"ABC1D23","marca":"Fiat","modelo":"Uno","ano":2020}] - Veículos do cliente
+   * @responseBody 403 - {"erro":{"codigo":"ACESSO_NEGADO","mensagem":"Acesso restrito ao(s) papel(is): cliente."}} - Token de administrador
+   */
+  async meus({ usuarioAutenticado }: HttpContext) {
+    return apresentarVeiculos(
+      await this.listarVeiculos.executar({ clienteId: usuarioAutenticado!.sub })
+    )
+  }
+
+  /**
    * @show
    * @tag Veículos
    * @summary Detalha um veículo pelo identificador

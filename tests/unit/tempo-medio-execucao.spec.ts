@@ -18,6 +18,9 @@ class OrdensMemoria implements RepositorioDeOrdensServico {
   async listar() {
     return this.itens
   }
+  async listarPorCliente(clienteId: string) {
+    return this.itens.filter((ordem) => ordem.clienteId === clienteId)
+  }
 }
 
 /** Reconstitui uma OS finalizada com janela de execução conhecida. */
