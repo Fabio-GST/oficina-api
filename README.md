@@ -159,12 +159,45 @@ O enunciado completo da fase está em
 
 ## Documentação
 
+Este repositório concentra a **documentação arquitetural** do projeto (Fase 3). O modelo de
+dados (ER e justificativa do banco) fica no repositório do banco e é linkado aqui.
+
+### Arquitetura (Fase 3)
+
 | Documento | Conteúdo |
 | --- | --- |
+| [Diagrama de componentes](./docs/arquitetura/diagrama-de-componentes.md) | Visão de nuvem: API Gateway, Lambda, EKS, RDS, SSM/Secrets Manager, GitHub Actions e New Relic, por repositório |
+| [Diagramas de sequência](./docs/arquitetura/diagrama-de-sequencia.md) | Autenticação por CPF, uso do token no portal do cliente e abertura de Ordem de Serviço |
+| [Modelo de dados (ER)](https://github.com/Fabio-GST/oficina-infra-db/blob/main/docs/modelo-de-dados.md) | Justificativa formal do MySQL/RDS, diagrama ER, relacionamentos e ajustes propostos — no repo `oficina-infra-db` |
+
+### RFCs (decisões técnicas em discussão → aceitas)
+
+| RFC | Decisão |
+| --- | --- |
+| [0001 — Escolha da nuvem](./docs/rfc/0001-escolha-da-nuvem.md) | AWS (conta Academy Learner Lab) e as adaptações às suas restrições |
+| [0002 — Banco gerenciado](./docs/rfc/0002-banco-gerenciado.md) | RDS MySQL 8 por ambiente; por que relacional, por que MySQL, ajustes no modelo |
+| [0003 — Estratégia de autenticação](./docs/rfc/0003-estrategia-de-autenticacao.md) | CPF via Function Serverless, JWT HS256 compartilhado, papéis `admin`/`cliente` |
+| [0004 — Observabilidade](./docs/rfc/0004-observabilidade.md) | New Relic (APM, infra K8s, logs com `trace.id`), dashboards e alertas exigidos |
+
+### ADRs (decisões arquiteturais permanentes)
+
+| ADR | Decisão |
+| --- | --- |
+| [0001 — Arquitetura orientada a eventos](./docs/adr/0001-arquitetura-orientada-a-eventos.md) | Barramento de eventos de domínio in-process com publicação após commit (Fase 2) |
+| [0002 — Segregação em quatro repositórios](./docs/adr/0002-segregacao-em-quatro-repositorios.md) | Um state por repositório; contrato via SSM Parameter Store e Secrets Manager |
+| [0003 — API Gateway como ponto único de entrada](./docs/adr/0003-api-gateway-como-ponto-unico-de-entrada.md) | HTTP API + VPC Link → NLB interno; rota `/auth/cpf` para a Lambda |
+| [0004 — HPA por CPU e memória](./docs/adr/0004-hpa-por-cpu-e-memoria.md) | HPA 2–5 réplicas + Cluster Autoscaler no node group |
+| [0005 — Comunicação síncrona HTTP e eventos internos](./docs/adr/0005-comunicacao-sincrona-http-e-eventos-internos.md) | HTTP entre serviços, eventos de domínio dentro da aplicação, sem broker nesta fase |
+| [0006 — Migrações pertencem à aplicação](./docs/adr/0006-migracoes-pertencem-a-aplicacao.md) | Lucid + Job de migração no CD; o repo do banco provisiona e documenta |
+
+### Outros
+
+| Documento | Conteúdo |
+| --- | --- |
+| [Roteiro do vídeo da Fase 3](./docs/roteiro-video-fase-3.md) | Cena a cena (≤ 15 min) cobrindo autenticação, pipeline, deploy, APIs, dashboard, logs e traces |
+| [Mapa de Contexto](./docs/diagrama-de-contexto.md) | Eventos entre os bounded contexts |
 | [Documentação da Fase 1](./docs/documentacao-fase-1.md) | Documento de entrega: visão geral, Linguagem Ubíqua, fluxos DDD por contexto e relatório SonarQube |
 | [Enunciado da Fase 2](./docs/tech-challenge-fase-2.md) | Requisitos obrigatórios e entregáveis da Fase 2 |
-| [ADR 0001 — Arquitetura Orientada a Eventos](./docs/adr/0001-arquitetura-orientada-a-eventos.md) | Decisão de arquitetura de eventos de domínio |
-| [Mapa de Contexto](./docs/diagrama-de-contexto.md) | Eventos entre os bounded contexts |
 
 ---
 
@@ -182,8 +215,11 @@ Para regerar a spec após mudar rotas: suba a aplicação e salve a resposta de 
 
 ## Vídeo demonstrativo
 
-Vídeo (12min20s) com o deploy, a execução do CI/CD, o consumo das APIs e a escalabilidade
-automática: **[assistir ao vídeo](https://drive.google.com/file/d/1wLm3q3dAi6ljX0bM3NB71IYAEVS5qotA/view?usp=sharing)**.
+- **Fase 3** (até 15 min — autenticação por CPF, pipeline, deploy, APIs protegidas, dashboard,
+  logs e traces): _link a publicar após a gravação_ — roteiro em
+  [`docs/roteiro-video-fase-3.md`](./docs/roteiro-video-fase-3.md).
+- **Fase 2** (12min20s — deploy, CI/CD, consumo das APIs e escalabilidade automática):
+  **[assistir ao vídeo](https://drive.google.com/file/d/1wLm3q3dAi6ljX0bM3NB71IYAEVS5qotA/view?usp=sharing)**.
 
 ---
 
