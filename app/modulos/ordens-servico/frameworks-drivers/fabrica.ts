@@ -29,6 +29,12 @@ import {
   ConsultarAndamento,
   CalcularTempoMedioExecucao,
 } from '../use-cases/consultas.js'
+import {
+  ListarMinhasOrdens,
+  DetalharMinhaOrdem,
+  AprovarMinhaOrdem,
+  RecusarMinhaOrdem,
+} from '../use-cases/portal-do-cliente.js'
 
 /** Composition root do módulo: registra adaptadores e casos de uso no container. */
 export function registrarOrdensServico(app: ApplicationService) {
@@ -98,8 +104,28 @@ export function registrarOrdensServico(app: ApplicationService) {
     ListarOrdens,
     ConsultarAndamento,
     CalcularTempoMedioExecucao,
+    ListarMinhasOrdens,
+    DetalharMinhaOrdem,
   ] as const
   for (const CasoDeUso of simples) {
     c.bind(CasoDeUso, async (r) => new CasoDeUso(await r.make(RepositorioDeOrdensServicoLucid)))
   }
+
+  // Portal do cliente: confere a posse da OS e delega ao comando administrativo.
+  c.bind(
+    AprovarMinhaOrdem,
+    async (r) =>
+      new AprovarMinhaOrdem(
+        await r.make(RepositorioDeOrdensServicoLucid),
+        await r.make(AprovarOrdemServico)
+      )
+  )
+  c.bind(
+    RecusarMinhaOrdem,
+    async (r) =>
+      new RecusarMinhaOrdem(
+        await r.make(RepositorioDeOrdensServicoLucid),
+        await r.make(RecusarOrdemServico)
+      )
+  )
 }

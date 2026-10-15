@@ -50,8 +50,14 @@ Prioridades: \`NORMAL\`, \`ALTA\`. Status de pagamento: \`PENDENTE\`, \`PARCIAL\
 
 ## Autenticação
 
-Rotas administrativas exigem **JWT Bearer** (\`Authorization: Bearer <token>\`).
-Obtenha o token em \`POST /auth/login\`. Exceção pública: \`GET /work-orders/:id/tracking\`.
+Toda rota protegida exige **JWT Bearer** (\`Authorization: Bearer <token>\`), assinado em HS256 com o segredo compartilhado. Há dois emissores e dois papéis:
+
+| Papel | Emissor | Como obter | Rotas |
+| --- | --- | --- | --- |
+| \`admin\` | esta API | \`POST /auth/login\` (e-mail e senha do operador) | Rotas administrativas |
+| \`cliente\` | Function Serverless (\`oficina-auth-lambda\`) via API Gateway | \`POST /auth/cpf\` com \`{ "cpf": "111.444.777-35" }\` → valida o CPF, confere existência e status em \`clientes\` e devolve \`{ token, tipo, expiraEm, cliente }\` | **Portal do Cliente** (\`/me/*\`) |
+
+Exceção pública: \`GET /work-orders/:id/tracking\`. O token de cliente carrega \`sub\` (id do cliente), \`cpf\` e \`papel\`; a API nunca aceita o id do cliente pela URL nas rotas \`/me/*\`.
 
 ## Códigos de erro
 
@@ -70,7 +76,7 @@ export default {
   description: descricaoLinguagemUbiqua,
   tagIndex: 2,
   snakeCase: true,
-  ignore: ['/swagger', '/docs', '/', '/health'],
+  ignore: ['/swagger', '/docs', '/', '/health', '/health/ready'],
   preferredPutPatch: 'PUT',
   common: {
     parameters: {},
