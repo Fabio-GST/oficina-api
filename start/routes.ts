@@ -28,8 +28,16 @@ const OrdensServicoController = () =>
 const PagamentosController = () =>
   import('#modulos/pagamento/interface-adapters/controllers/pagamentos_controller')
 
+const HealthController = () => import('#controllers/health_controller')
+
 router.get('/', async () => ({ servico: 'API Oficina Mecânica', documentacao: '/docs' }))
-router.get('/health', async () => ({ status: 'ok' }))
+
+/*
+| Healthcheck: `/health` é o liveness (processo responde); `/health/ready` é o
+| readiness (consulta o banco) usado pelo Kubernetes antes de rotear tráfego.
+*/
+router.get('/health', [HealthController, 'liveness'])
+router.get('/health/ready', [HealthController, 'readiness'])
 
 /*
 | Documentação OpenAPI / Swagger UI
@@ -114,11 +122,15 @@ router
   .use(middleware.webhook())
 
 /*
-| Rotas administrativas protegidas por JWT
+| Rotas para qualquer portador de JWT válido (admin ou cliente)
+*/
+router.get('/me', [AutenticacaoController, 'me']).use(middleware.auth())
+
+/*
+| Rotas administrativas: JWT válido E papel `admin`
 */
 router
   .group(() => {
-    router.get('/me', [AutenticacaoController, 'me'])
     router.post('/auth/register', [AutenticacaoController, 'register'])
 
     // Clientes
@@ -186,4 +198,4 @@ router
     // Métricas
     router.get('/metrics/average-execution-time', [OrdensServicoController, 'tempoMedioExecucao'])
   })
-  .use(middleware.auth())
+  .use([middleware.auth(), middleware.papel({ papeis: ['admin'] })])

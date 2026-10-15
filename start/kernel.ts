@@ -24,6 +24,7 @@ server.errorHandler(() => import('#exceptions/handler'))
  */
 server.use([
   () => import('#middleware/container_bindings_middleware'),
+  () => import('#middleware/correlacao_middleware'),
   () => import('#middleware/force_json_response_middleware'),
   () => import('@adonisjs/cors/cors_middleware'),
 ])
@@ -40,5 +41,6 @@ router.use([() => import('@adonisjs/core/bodyparser_middleware')])
  */
 export const middleware = router.named({
   auth: () => import('#middleware/autenticacao_middleware'),
+  papel: () => import('#middleware/papel_middleware'),
   webhook: () => import('#middleware/segredo_webhook_middleware'),
 })
