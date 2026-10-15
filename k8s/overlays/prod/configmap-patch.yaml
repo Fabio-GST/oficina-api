@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oficina-config
+data:
+  LOG_LEVEL: 'info'
+  # Troque para "email" (com SMTP_* no Secret) para notificar clientes por e-mail.
+  NOTIFICACAO_DRIVER: 'log'
+  NEW_RELIC_APP_NAME: 'oficina-api-prod'

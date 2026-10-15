@@ -1,0 +1,23 @@
+# Configuração NÃO sensível da API. Conexão com o banco (DB_*), chaves e
+# segredos vêm do Secret `oficina-secrets`, montado pelo CD a partir do AWS
+# Secrets Manager (oficina/<ambiente>/db) e dos secrets do GitHub.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oficina-config
+data:
+  TZ: 'UTC'
+  NODE_ENV: 'production'
+  HOST: '0.0.0.0'
+  PORT: '3333'
+  LOG_LEVEL: 'info'
+  DB_CONNECTION: 'mysql'
+  JWT_EXPIRES_IN: '1h'
+  # "log" registra as notificações no stdout; "email" envia via SMTP
+  # (credenciais no Secret).
+  NOTIFICACAO_DRIVER: 'log'
+  # Observabilidade (RFC 0004): o Node carrega o agente do New Relic antes da
+  # aplicação (-r inicia o agente; o loader instrumenta os imports ESM). A
+  # license key vem do Secret; sem ela o agente fica desligado.
+  NODE_OPTIONS: '-r newrelic --import newrelic/esm-loader.mjs'
+  NEW_RELIC_APP_NAME: 'oficina-api'

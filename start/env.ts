@@ -57,4 +57,13 @@ export default await Env.create(new URL('../', import.meta.url), {
   SMTP_PASSWORD: Env.schema.string.optional(),
   MAIL_FROM: Env.schema.string.optional(),
   EMAIL_ALMOXARIFE: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | Observabilidade (New Relic). Sem a license key o agente e a
+  | telemetria de negócio ficam desligados (local e testes).
+  |----------------------------------------------------------
+  */
+  NEW_RELIC_LICENSE_KEY: Env.schema.string.optional(),
+  NEW_RELIC_APP_NAME: Env.schema.string.optional(),
 })

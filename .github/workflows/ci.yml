@@ -4,7 +4,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [homolog, main]
 
 jobs:
   qualidade:
@@ -38,3 +38,35 @@ jobs:
 
       - name: Build da aplicação
         run: npm run build
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build da imagem Docker (sem push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: oficina-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  manifestos:
+    name: Validar manifestos Kubernetes (Kustomize)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Renderizar overlays hml e prod
+        run: |
+          for amb in hml prod; do
+            echo "== overlays/$amb"
+            kubectl kustomize "k8s/overlays/$amb" > "/tmp/$amb.yaml"
+            grep -q "namespace: oficina-$amb" "/tmp/$amb.yaml"
+            grep -q "aws-load-balancer-type: nlb" "/tmp/$amb.yaml"
+          done

@@ -1,36 +1,53 @@
-# Entrega Contínua: build/push da imagem Docker no GHCR e deploy no cluster
-# Kubernetes (aplicação dos manifestos + Job de migração do banco).
+# Entrega Contínua no EKS (AWS Academy Learner Lab).
 #
-# O job de deploy só roda quando a variável de repositório DEPLOY_HABILITADO
-# for "true" E o secret KUBE_CONFIG (kubeconfig em base64) estiver configurado.
-# Para cluster local (kind), use um runner self-hosted na mesma máquina ou
-# exponha o cluster; sem isso, o pipeline entrega a imagem e para por aí.
+#   push em `homolog` → ambiente hml  → namespace oficina-hml
+#   push em `main`    → ambiente prod → namespace oficina-prod
+#
+# 1. Build e push da imagem no GHCR (tags: SHA do commit + hml|prod + latest em prod).
+# 2. Deploy: credenciais temporárias do Learner Lab (secrets do GitHub — expiram
+#    a cada sessão; ver README) → kubeconfig do cluster cujo nome está no SSM
+#    (/oficina/eks/nome) → Secret do Kubernetes montado a partir do Secrets
+#    Manager (oficina/<amb>/db) e dos secrets do GitHub → `kustomize build |
+#    kubectl apply` → Job de migração → rollout → smoke test pelo API Gateway.
+#
+# Sem IAM próprio no Learner Lab não há OIDC nem IRSA: o acesso ao cluster usa
+# as mesmas credenciais que o criaram (repo oficina-infra-k8s).
 name: CD
 
 on:
   push:
-    branches: [main]
+    branches: [homolog, main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 concurrency:
-  group: cd
+  group: cd-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
+  AWS_REGION: us-east-1
   # minúsculas: tags Docker não aceitam maiúsculas do repository_owner (Fabio-GST)
   IMAGEM: ghcr.io/fabio-gst/oficina-api
+  AMBIENTE: ${{ github.ref_name == 'main' && 'prod' || 'hml' }}
 
 jobs:
   imagem:
     name: Build e push da imagem
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    outputs:
+      tag: ${{ github.sha }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Driver docker-container: necessário para o cache de camadas no GHA
+      # (o driver "docker" padrão não exporta cache).
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login no GHCR
         uses: docker/login-action@v3
@@ -39,63 +56,152 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Metadados da imagem
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGEM }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=raw,value=${{ env.AMBIENTE }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+
       - name: Build e push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            ${{ env.IMAGEM }}:latest
-            ${{ env.IMAGEM }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
-    name: Deploy no Kubernetes
+    name: Deploy no EKS (${{ github.ref_name == 'main' && 'prod' || 'hml' }})
     needs: imagem
-    if: vars.DEPLOY_HABILITADO == 'true'
     runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'hml' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Credenciais AWS (Learner Lab)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+
+      - name: Verificar sessão do lab
+        run: aws sts get-caller-identity
+
       - name: Configurar kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Configurar acesso ao cluster
+      - name: Descobrir cluster e namespace (SSM)
+        id: infra
         run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          CLUSTER=$(aws ssm get-parameter --name /oficina/eks/nome --query Parameter.Value --output text)
+          NAMESPACE=$(aws ssm get-parameter --name "/oficina/${AMBIENTE}/namespace" --query Parameter.Value --output text 2>/dev/null || echo "oficina-${AMBIENTE}")
+          GATEWAY=$(aws ssm get-parameter --name "/oficina/${AMBIENTE}/gateway/url" --query Parameter.Value --output text 2>/dev/null || true)
+          echo "cluster=$CLUSTER" >> "$GITHUB_OUTPUT"
+          echo "namespace=$NAMESPACE" >> "$GITHUB_OUTPUT"
+          echo "gateway=$GATEWAY" >> "$GITHUB_OUTPUT"
+          echo "Cluster: $CLUSTER | Namespace: $NAMESPACE | Gateway: ${GATEWAY:-<ainda não criado>}"
 
-      - name: Apontar manifestos para a imagem publicada
+      - name: kubeconfig do EKS
         run: |
-          sed -i "s|ghcr.io/fabio-gst/oficina-api:latest|${IMAGEM}:${{ github.sha }}|" \
-            k8s/deployment.yaml k8s/migration-job.yaml
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "${{ steps.infra.outputs.cluster }}"
+          kubectl get namespace "${{ steps.infra.outputs.namespace }}"
 
-      - name: Namespace e configuração
-        run: kubectl apply -f k8s/namespace.yaml -f k8s/configmap.yaml
-
-      - name: Secret da aplicação (a partir dos GitHub Secrets)
+      # Sem IRSA/External Secrets no Learner Lab, o pipeline leva o segredo ao
+      # cluster: credenciais do RDS vêm do Secrets Manager (repo oficina-infra-db)
+      # e as chaves da aplicação dos secrets do GitHub (environment hml/prod).
+      # JWT_SECRET deve ser o MESMO usado pela Function de autenticação por CPF.
+      # NEW_RELIC_LICENSE_KEY é opcional: vazio desliga o agente APM (RFC 0004).
+      - name: Secret da aplicação (Secrets Manager + GitHub Secrets)
+        env:
+          NAMESPACE: ${{ steps.infra.outputs.namespace }}
+          APP_KEY: ${{ secrets.APP_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
         run: |
-          kubectl -n oficina create secret generic oficina-secrets \
-            --from-literal=APP_KEY='${{ secrets.APP_KEY }}' \
-            --from-literal=JWT_SECRET='${{ secrets.JWT_SECRET }}' \
-            --from-literal=WEBHOOK_SECRET='${{ secrets.WEBHOOK_SECRET }}' \
-            --from-literal=DB_PASSWORD='${{ secrets.DB_PASSWORD }}' \
-            --from-literal=MYSQL_ROOT_PASSWORD='${{ secrets.DB_PASSWORD }}' \
+          set -euo pipefail
+          test -n "$APP_KEY" || { echo "::error::secret APP_KEY ausente no environment ${AMBIENTE}"; exit 1; }
+          test -n "$JWT_SECRET" || { echo "::error::secret JWT_SECRET ausente no environment ${AMBIENTE}"; exit 1; }
+          test -n "$NEW_RELIC_LICENSE_KEY" || echo "::warning::secret NEW_RELIC_LICENSE_KEY ausente no environment ${AMBIENTE}: agente New Relic desligado"
+
+          BANCO=$(aws secretsmanager get-secret-value --secret-id "oficina/${AMBIENTE}/db" --query SecretString --output text)
+          for chave in DB_HOST DB_PORT DB_DATABASE DB_USER DB_PASSWORD; do
+            valor=$(echo "$BANCO" | jq -r --arg k "$chave" '.[$k] // empty')
+            test -n "$valor" || { echo "::error::chave $chave ausente no segredo oficina/${AMBIENTE}/db"; exit 1; }
+            echo "::add-mask::$valor"
+          done
+
+          kubectl -n "$NAMESPACE" create secret generic oficina-secrets \
+            --from-literal=DB_HOST="$(echo "$BANCO" | jq -r .DB_HOST)" \
+            --from-literal=DB_PORT="$(echo "$BANCO" | jq -r .DB_PORT)" \
+            --from-literal=DB_DATABASE="$(echo "$BANCO" | jq -r .DB_DATABASE)" \
+            --from-literal=DB_USER="$(echo "$BANCO" | jq -r .DB_USER)" \
+            --from-literal=DB_PASSWORD="$(echo "$BANCO" | jq -r .DB_PASSWORD)" \
+            --from-literal=APP_KEY="$APP_KEY" \
+            --from-literal=JWT_SECRET="$JWT_SECRET" \
+            --from-literal=WEBHOOK_SECRET="${WEBHOOK_SECRET}" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="${NEW_RELIC_LICENSE_KEY}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Banco de dados
+      - name: Apontar o overlay para a imagem publicada
         run: |
-          kubectl apply -f k8s/mysql.yaml
-          kubectl -n oficina rollout status statefulset/mysql --timeout=180s
+          sed -i "s|newTag: ${AMBIENTE}$|newTag: ${{ needs.imagem.outputs.tag }}|" "k8s/overlays/${AMBIENTE}/kustomization.yaml"
+          grep -n "newTag" "k8s/overlays/${AMBIENTE}/kustomization.yaml"
 
-      - name: Migração do banco
+      - name: kustomize build | kubectl apply (+ Job de migração)
+        env:
+          NAMESPACE: ${{ steps.infra.outputs.namespace }}
         run: |
-          kubectl -n oficina delete job oficina-migracao --ignore-not-found
-          kubectl apply -f k8s/migration-job.yaml
-          kubectl -n oficina wait --for=condition=complete job/oficina-migracao --timeout=180s
+          set -euo pipefail
+          # O Job é imutável: remove o da entrega anterior antes de reaplicar.
+          kubectl -n "$NAMESPACE" delete job oficina-migracao --ignore-not-found
+          kubectl kustomize "k8s/overlays/${AMBIENTE}" | kubectl apply -f -
+          if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job/oficina-migracao --timeout=300s; then
+            echo "::error::Job de migração falhou"
+            kubectl -n "$NAMESPACE" logs job/oficina-migracao --tail=100 || true
+            exit 1
+          fi
+          kubectl -n "$NAMESPACE" logs job/oficina-migracao --tail=30 || true
 
-      - name: API, Service e HPA
+      - name: Aguardar o rollout da API
+        env:
+          NAMESPACE: ${{ steps.infra.outputs.namespace }}
         run: |
-          kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml -f k8s/hpa.yaml
-          kubectl -n oficina rollout status deployment/oficina-api --timeout=180s
+          if ! kubectl -n "$NAMESPACE" rollout status deployment/oficina-api --timeout=300s; then
+            echo "::error::Rollout falhou"
+            kubectl -n "$NAMESPACE" get pods -l app=oficina-api
+            kubectl -n "$NAMESPACE" logs deployment/oficina-api --tail=100 || true
+            exit 1
+          fi
+          kubectl -n "$NAMESPACE" get svc oficina-api -o wide
+
+      - name: Smoke test pelo API Gateway
+        if: steps.infra.outputs.gateway != ''
+        run: |
+          URL="${{ steps.infra.outputs.gateway }}"
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 10 "$URL/health/ready" && echo; then exit 0; fi
+            echo "gateway ainda não responde (tentativa $i/12)…"; sleep 10
+          done
+          echo "::error::$URL/health/ready não respondeu 200"
+          exit 1
+
+      - name: Resumo
+        run: |
+          {
+            echo "## Deploy ${AMBIENTE}"
+            echo
+            echo "- Imagem: \`${IMAGEM}:${{ needs.imagem.outputs.tag }}\`"
+            echo "- Cluster: \`${{ steps.infra.outputs.cluster }}\` · Namespace: \`${{ steps.infra.outputs.namespace }}\`"
+            echo "- Gateway: ${{ steps.infra.outputs.gateway || '_ainda não criado (repo oficina-infra-k8s, HABILITAR_GATEWAY)_' }}"
+          } >> "$GITHUB_STEP_SUMMARY"

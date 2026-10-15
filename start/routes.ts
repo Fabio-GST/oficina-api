@@ -25,11 +25,21 @@ const PecasController = () =>
   import('#modulos/estoque/interface-adapters/controllers/pecas_controller')
 const OrdensServicoController = () =>
   import('#modulos/ordens-servico/interface-adapters/controllers/ordens_servico_controller')
+const PortalClienteController = () =>
+  import('#modulos/ordens-servico/interface-adapters/controllers/portal_cliente_controller')
 const PagamentosController = () =>
   import('#modulos/pagamento/interface-adapters/controllers/pagamentos_controller')
 
+const HealthController = () => import('#controllers/health_controller')
+
 router.get('/', async () => ({ servico: 'API Oficina Mecânica', documentacao: '/docs' }))
-router.get('/health', async () => ({ status: 'ok' }))
+
+/*
+| Healthcheck: `/health` é o liveness (processo responde); `/health/ready` é o
+| readiness (consulta o banco) usado pelo Kubernetes antes de rotear tráfego.
+*/
+router.get('/health', [HealthController, 'liveness'])
+router.get('/health/ready', [HealthController, 'readiness'])
 
 /*
 | Documentação OpenAPI / Swagger UI
@@ -51,6 +61,8 @@ const DESCRICOES_POR_DOMINIO: Record<string, string> = {
   'ORDENS DE SERVIÇO':
     'Ciclo de vida da OS: abertura, orçamento, aprovação, execução, finalização e entrega.',
   'PAGAMENTOS': 'Cobrança da OS, descontos, registro de pagamentos e Nota Fiscal.',
+  'PORTAL DO CLIENTE':
+    'Rotas do cliente autenticado por CPF (JWT da Function Serverless): seus veículos e suas OS, com aprovação ou recusa do orçamento.',
 }
 
 const ORDEM_DOS_DOMINIOS = Object.keys(DESCRICOES_POR_DOMINIO)
@@ -114,11 +126,29 @@ router
   .use(middleware.webhook())
 
 /*
-| Rotas administrativas protegidas por JWT
+| Rotas para qualquer portador de JWT válido (admin ou cliente)
+*/
+router.get('/me', [AutenticacaoController, 'me']).use(middleware.auth())
+
+/*
+| Portal do cliente: JWT emitido pela Function Serverless (autenticação por CPF)
+| E papel `cliente`. O cliente só enxerga e decide sobre as próprias OS e veículos.
 */
 router
   .group(() => {
-    router.get('/me', [AutenticacaoController, 'me'])
+    router.get('/me/vehicles', [VeiculosController, 'meus'])
+    router.get('/me/work-orders', [PortalClienteController, 'minhasOrdens'])
+    router.get('/me/work-orders/:id', [PortalClienteController, 'minhaOrdem'])
+    router.post('/me/work-orders/:id/approval', [PortalClienteController, 'aprovar'])
+    router.post('/me/work-orders/:id/refusal', [PortalClienteController, 'recusar'])
+  })
+  .use([middleware.auth(), middleware.papel({ papeis: ['cliente'] })])
+
+/*
+| Rotas administrativas: JWT válido E papel `admin`
+*/
+router
+  .group(() => {
     router.post('/auth/register', [AutenticacaoController, 'register'])
 
     // Clientes
@@ -186,4 +216,4 @@ router
     // Métricas
     router.get('/metrics/average-execution-time', [OrdensServicoController, 'tempoMedioExecucao'])
   })
-  .use(middleware.auth())
+  .use([middleware.auth(), middleware.papel({ papeis: ['admin'] })])

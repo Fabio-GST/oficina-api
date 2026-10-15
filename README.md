@@ -1,18 +1,40 @@
-# API - Oficina Mecânica (Tech Challenge - Fases 1 e 2)
+# oficina-api — API da Oficina Mecânica (Tech Challenge SOAT, Fase 3)
 
-MVP do back-end de um **Sistema Integrado de Atendimento e Execução de Serviços** para uma
-oficina mecânica. Permite gerir **Ordens de Serviço (OS)**, clientes, veículos, serviços e
-peças/estoque, com autenticação JWT, documentação Swagger e empacotamento via Docker.
+Aplicação principal do **Sistema Integrado de Atendimento e Execução de Serviços** de uma
+oficina mecânica: **Ordens de Serviço (OS)**, clientes, veículos, serviços, peças/estoque e
+pagamentos. Roda em **Kubernetes (Amazon EKS)** atrás de um **API Gateway**, com banco
+gerenciado (**RDS MySQL**) e deploy automático por ambiente.
 
-Desenvolvido com **AdonisJS v6 + TypeScript**, banco **MySQL** (via Lucid) e arquitetura
-**Domain-Driven Design (DDD)** com Linguagem Ubíqua em português.
+Desenvolvido com **AdonisJS v6 + TypeScript**, Lucid ORM e arquitetura **DDD / Clean
+Architecture** com Linguagem Ubíqua em português.
+
+## Propósito deste repositório
+
+Na Fase 3 o projeto foi segregado em **quatro repositórios**; este é a aplicação:
+
+| Repositório | Papel |
+| --- | --- |
+| **`oficina-api`** (este) | API AdonisJS, manifestos Kubernetes (Kustomize) e pipeline de CI/CD que publica a imagem e faz o deploy no EKS |
+| [`oficina-infra-k8s`](https://github.com/Fabio-GST/oficina-infra-k8s) | Terraform da VPC, do cluster EKS (namespaces `oficina-hml`/`oficina-prod`, metrics-server) e do API Gateway com VPC Link |
+| [`oficina-infra-db`](https://github.com/Fabio-GST/oficina-infra-db) | Terraform do RDS MySQL por ambiente, credenciais no Secrets Manager e modelo de dados (ER) |
+| [`oficina-auth-lambda`](https://github.com/Fabio-GST/oficina-auth-lambda) | Function serverless que autentica o **cliente por CPF** e emite o JWT aceito por esta API |
+
+Os repositórios se comunicam por parâmetros no **SSM Parameter Store** (`/oficina/*`) e
+segredos no **Secrets Manager** (`oficina/<ambiente>/db`), sem acoplar os states do Terraform.
+
+### Tecnologias
+
+AdonisJS 6 · TypeScript · Lucid (MySQL 8 / SQLite nos testes) · VineJS · JWT HS256 ·
+Japa (testes) · Docker · Kubernetes (EKS) + Kustomize · GitHub Actions · AWS (EKS, RDS, API
+Gateway, SSM, Secrets Manager) em conta **AWS Academy Learner Lab**.
 
 ---
 
 ## Sumário
 
+- [Arquitetura da solução (Fase 3)](#arquitetura-da-solução-fase-3)
+- [Deploy automático no EKS (CI/CD)](#deploy-automático-no-eks-cicd)
 - [Fase 2 — Objetivos](#fase-2--objetivos)
-- [Arquitetura da solução (Fase 2)](#arquitetura-da-solução-fase-2)
 - [Documentação](#documentação)
 - [Collection das APIs](#collection-das-apis)
 - [Arquitetura](#arquitetura)
@@ -21,14 +43,97 @@ Desenvolvido com **AdonisJS v6 + TypeScript**, banco **MySQL** (via Lucid) e arq
 - [Como executar localmente](#como-executar-localmente)
 - [Autenticação](#autenticação)
 - [Endpoints](#endpoints)
+- [Observabilidade: correlação e healthcheck](#observabilidade-correlação-e-healthcheck)
 - [Deploy em Kubernetes](#deploy-em-kubernetes)
-- [Provisionamento com Terraform (IaC)](#provisionamento-com-terraform-iac)
 - [Testes e cobertura](#testes-e-cobertura)
 - [Segurança](#segurança)
 
 ---
 
+## Arquitetura da solução (Fase 3)
+
+```mermaid
+flowchart LR
+  subgraph Consumidores
+    U[Cliente / Atendente]
+  end
+
+  subgraph GH["GitHub (este repo)"]
+    PUSH["push em homolog / main"] --> CI["CI: lint · typecheck · testes · build · kustomize"]
+    PUSH --> CD["CD: imagem → GHCR → kubectl apply -k"]
+  end
+
+  subgraph AWS["AWS (us-east-1) — Learner Lab"]
+    GW["API Gateway HTTP<br/>(oficina-infra-k8s)"]
+    LAMBDA["Lambda auth por CPF<br/>(oficina-auth-lambda)"]
+    subgraph EKS["EKS — namespaces oficina-hml / oficina-prod"]
+      NLB["NLB interno<br/>Service LoadBalancer"] --> DEP["Deployment oficina-api<br/>HPA 2–5 réplicas"]
+      JOB["Job migration:run + db:seed"]
+    end
+    RDS[("RDS MySQL<br/>(oficina-infra-db)")]
+    SM["Secrets Manager<br/>oficina/&lt;amb&gt;/db"]
+    SSM["SSM Parameter Store<br/>/oficina/*"]
+  end
+
+  U -->|"POST /auth/cpf"| GW --> LAMBDA --> RDS
+  U -->|"JWT (admin ou cliente)"| GW -->|VPC Link| NLB
+  DEP --> RDS
+  JOB --> RDS
+  CD -->|"lê nome do cluster"| SSM
+  CD -->|"monta Secret oficina-secrets"| SM
+```
+
+- **Dois tipos de JWT, um só segredo (HS256)**: o administrador faz login por e-mail/senha nesta
+  API (`papel: admin`); o cliente faz login por CPF na Function (`papel: cliente`). O mesmo
+  middleware verifica os dois e um guard de papel protege as rotas administrativas.
+- **Ambientes**: `homolog` → namespace `oficina-hml`; `main` → `oficina-prod`, no mesmo cluster
+  (um cluster por ambiente dobraria o custo fixo do EKS no crédito da Academy).
+- **Sem IAM próprio** (restrição do Learner Lab): não há OIDC, IRSA nem AWS Load Balancer
+  Controller. O NLB é o nativo do `Service type=LoadBalancer` e o Secret do Kubernetes é montado
+  pelo pipeline a partir do Secrets Manager.
+
+---
+
+## Deploy automático no EKS (CI/CD)
+
+| Workflow | Gatilho | O que faz |
+| --- | --- | --- |
+| [`ci.yml`](./.github/workflows/ci.yml) | PR e push em `homolog`/`main` | lint, typecheck, testes (SQLite), build, build da imagem sem push e renderização dos overlays Kustomize |
+| [`cd.yml`](./.github/workflows/cd.yml) | push em `homolog` (→ **hml**) e `main` (→ **prod**) | build/push da imagem no GHCR (`sha` + `hml`/`prod`), kubeconfig via SSM `/oficina/eks/nome`, Secret a partir do Secrets Manager, `kubectl kustomize overlays/<amb> \| kubectl apply`, Job de migração, `rollout status` e smoke test pela URL do API Gateway |
+
+### Secrets e variáveis necessários no GitHub
+
+Em **Settings → Environments** crie `hml` e `prod` (em `prod`, adicione *required reviewers*
+para aprovação manual) e configure em cada um:
+
+| Secret | Origem |
+| --- | --- |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Credenciais temporárias do Learner Lab (painel *AWS Details* → *AWS CLI*). **Expiram a cada sessão**: atualize após cada *Start Lab*, antes de fazer push |
+| `APP_KEY` | 32+ caracteres aleatórios (`node ace generate:key`) |
+| `JWT_SECRET` | Segredo HS256 — **o mesmo** configurado na Function `oficina-auth-lambda` do ambiente |
+| `WEBHOOK_SECRET` | Segredo do webhook de decisão de orçamento |
+| `NEW_RELIC_LICENSE_KEY` | *Ingest license key* da conta New Relic (opcional: vazio desliga o agente APM) — ver [Observabilidade](#observabilidade-new-relic-correlação-e-healthcheck) |
+
+As credenciais do banco (`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USER`, `DB_PASSWORD`) **não**
+ficam no GitHub: o CD as lê do Secrets Manager `oficina/<ambiente>/db`, publicado pelo
+`oficina-infra-db`.
+
+> A imagem no GHCR precisa ser **pública** (Packages → oficina-api → *Change visibility*) ou o
+> cluster precisará de um `imagePullSecret`; o pipeline assume a imagem pública.
+
+### Ordem de provisionamento
+
+1. `oficina-infra-k8s`: VPC + EKS + namespaces (sem gateway).
+2. `oficina-infra-db`: RDS + Secrets Manager.
+3. **Este repo**: push em `homolog` cria o NLB interno e sobe a API em `oficina-hml`.
+4. `oficina-infra-k8s` com `HABILITAR_GATEWAY=true`: API Gateway + VPC Link → NLB.
+5. `oficina-auth-lambda`: rota `POST /auth/cpf` no gateway.
+
+---
+
 ## Fase 2 — Objetivos
+
+> Histórico da fase anterior, mantido para contexto.
 
 Com o aumento da demanda, a expansão para novas unidades e a necessidade de alta
 disponibilidade, a Fase 2 evolui a aplicação da Fase 1 para garantir **qualidade, resiliência e
@@ -43,7 +148,8 @@ escalabilidade**, incorporando práticas modernas de infraestrutura e automaçã
 - **Conteinerização**: `Dockerfile` e `docker-compose` revisados;
 - **Kubernetes** (`/k8s`): Deployments, Services, ConfigMaps/Secrets e HPA (escala por
   CPU/memória);
-- **Terraform** (`/infra`): provisionamento do cluster Kubernetes e do banco de dados;
+- **Terraform**: provisionamento do cluster Kubernetes e do banco de dados (na Fase 3 o
+  Terraform saiu deste repositório para `oficina-infra-k8s` e `oficina-infra-db`);
 - **CI/CD**: pipeline com build, testes, build da imagem Docker e deploy (aplicação, banco e
   manifestos) no cluster.
 
@@ -52,63 +158,47 @@ O enunciado completo da fase está em
 
 ---
 
-## Arquitetura da solução (Fase 2)
-
-Componentes da aplicação, infraestrutura provisionada e fluxo de deploy:
-
-```mermaid
-flowchart LR
-  subgraph Consumidores
-    U[Cliente / Atendente<br/>HTTP + JWT]
-    W[Sistema externo<br/>webhook de orçamento]
-  end
-
-  subgraph GH["GitHub"]
-    PR[Push / PR na main] --> CI["CI (Actions)<br/>lint · typecheck · testes · build"]
-    PR --> CD["CD (Actions)"]
-    CD --> IMG["Build da imagem Docker<br/>push no GHCR"]
-    IMG --> APPLY["kubectl apply<br/>manifestos /k8s"]
-  end
-
-  subgraph TF["Terraform (/infra)"]
-    T[terraform apply] --> KC["Cluster kind<br/>(Kubernetes local)"]
-    T --> NS["Namespace oficina<br/>+ Secret"]
-    T --> DB[("MySQL 8<br/>StatefulSet + PVC")]
-  end
-
-  subgraph K8S["Cluster Kubernetes (namespace oficina)"]
-    SVC[Service] --> DEP["Deployment API<br/>AdonisJS + TypeScript"]
-    HPA["HPA<br/>CPU/memória"] -. escala .-> DEP
-    CM[ConfigMap] --> DEP
-    SEC[Secret] --> DEP
-    JOB["Job de migração<br/>migration:run + db:seed"] --> DB
-    DEP --> DB
-  end
-
-  U --> SVC
-  W --> SVC
-  APPLY --> K8S
-  DEP --> SMTP["Servidor SMTP<br/>notificação de status por e-mail"]
-```
-
-- **Componentes:** API monolítica modular (Clean Architecture, bounded contexts), MySQL 8 e
-  notificação por e-mail (SMTP via nodemailer).
-- **Infraestrutura provisionada (Terraform):** cluster kind, namespace, Secret e MySQL — ver
-  [`infra/README.md`](./infra/README.md).
-- **Fluxo de deploy:** push na `main` dispara o CI (qualidade) e o CD, que publica a imagem no
-  GHCR e aplica os manifestos de [`/k8s`](./k8s) no cluster (Deployment, Service, ConfigMap,
-  Secret, HPA e Job de migração).
-
----
-
 ## Documentação
+
+Este repositório concentra a **documentação arquitetural** do projeto (Fase 3). O modelo de
+dados (ER e justificativa do banco) fica no repositório do banco e é linkado aqui.
+
+### Arquitetura (Fase 3)
 
 | Documento | Conteúdo |
 | --- | --- |
+| [Diagrama de componentes](./docs/arquitetura/diagrama-de-componentes.md) | Visão de nuvem: API Gateway, Lambda, EKS, RDS, SSM/Secrets Manager, GitHub Actions e New Relic, por repositório |
+| [Diagramas de sequência](./docs/arquitetura/diagrama-de-sequencia.md) | Autenticação por CPF, uso do token no portal do cliente e abertura de Ordem de Serviço |
+| [Modelo de dados (ER)](https://github.com/Fabio-GST/oficina-infra-db/blob/main/docs/modelo-de-dados.md) | Justificativa formal do MySQL/RDS, diagrama ER, relacionamentos e ajustes propostos — no repo `oficina-infra-db` |
+
+### RFCs (decisões técnicas em discussão → aceitas)
+
+| RFC | Decisão |
+| --- | --- |
+| [0001 — Escolha da nuvem](./docs/rfc/0001-escolha-da-nuvem.md) | AWS (conta Academy Learner Lab) e as adaptações às suas restrições |
+| [0002 — Banco gerenciado](./docs/rfc/0002-banco-gerenciado.md) | RDS MySQL 8 por ambiente; por que relacional, por que MySQL, ajustes no modelo |
+| [0003 — Estratégia de autenticação](./docs/rfc/0003-estrategia-de-autenticacao.md) | CPF via Function Serverless, JWT HS256 compartilhado, papéis `admin`/`cliente` |
+| [0004 — Observabilidade](./docs/rfc/0004-observabilidade.md) | New Relic (APM, infra K8s, logs com `trace.id`), dashboards e alertas exigidos |
+
+### ADRs (decisões arquiteturais permanentes)
+
+| ADR | Decisão |
+| --- | --- |
+| [0001 — Arquitetura orientada a eventos](./docs/adr/0001-arquitetura-orientada-a-eventos.md) | Barramento de eventos de domínio in-process com publicação após commit (Fase 2) |
+| [0002 — Segregação em quatro repositórios](./docs/adr/0002-segregacao-em-quatro-repositorios.md) | Um state por repositório; contrato via SSM Parameter Store e Secrets Manager |
+| [0003 — API Gateway como ponto único de entrada](./docs/adr/0003-api-gateway-como-ponto-unico-de-entrada.md) | HTTP API + VPC Link → NLB interno; rota `/auth/cpf` para a Lambda |
+| [0004 — HPA por CPU e memória](./docs/adr/0004-hpa-por-cpu-e-memoria.md) | HPA 2–5 réplicas + Cluster Autoscaler no node group |
+| [0005 — Comunicação síncrona HTTP e eventos internos](./docs/adr/0005-comunicacao-sincrona-http-e-eventos-internos.md) | HTTP entre serviços, eventos de domínio dentro da aplicação, sem broker nesta fase |
+| [0006 — Migrações pertencem à aplicação](./docs/adr/0006-migracoes-pertencem-a-aplicacao.md) | Lucid + Job de migração no CD; o repo do banco provisiona e documenta |
+
+### Outros
+
+| Documento | Conteúdo |
+| --- | --- |
+| [Roteiro do vídeo da Fase 3](./docs/roteiro-video-fase-3.md) | Cena a cena (≤ 15 min) cobrindo autenticação, pipeline, deploy, APIs, dashboard, logs e traces |
+| [Mapa de Contexto](./docs/diagrama-de-contexto.md) | Eventos entre os bounded contexts |
 | [Documentação da Fase 1](./docs/documentacao-fase-1.md) | Documento de entrega: visão geral, Linguagem Ubíqua, fluxos DDD por contexto e relatório SonarQube |
 | [Enunciado da Fase 2](./docs/tech-challenge-fase-2.md) | Requisitos obrigatórios e entregáveis da Fase 2 |
-| [ADR 0001 — Arquitetura Orientada a Eventos](./docs/adr/0001-arquitetura-orientada-a-eventos.md) | Decisão de arquitetura de eventos de domínio |
-| [Mapa de Contexto](./docs/diagrama-de-contexto.md) | Eventos entre os bounded contexts |
 
 ---
 
@@ -126,8 +216,11 @@ Para regerar a spec após mudar rotas: suba a aplicação e salve a resposta de 
 
 ## Vídeo demonstrativo
 
-Vídeo (12min20s) com o deploy, a execução do CI/CD, o consumo das APIs e a escalabilidade
-automática: **[assistir ao vídeo](https://drive.google.com/file/d/1wLm3q3dAi6ljX0bM3NB71IYAEVS5qotA/view?usp=sharing)**.
+- **Fase 3** (até 15 min — autenticação por CPF, pipeline, deploy, APIs protegidas, dashboard,
+  logs e traces): _link a publicar após a gravação_ — roteiro em
+  [`docs/roteiro-video-fase-3.md`](./docs/roteiro-video-fase-3.md).
+- **Fase 2** (12min20s — deploy, CI/CD, consumo das APIs e escalabilidade automática):
+  **[assistir ao vídeo](https://drive.google.com/file/d/1wLm3q3dAi6ljX0bM3NB71IYAEVS5qotA/view?usp=sharing)**.
 
 ---
 
@@ -246,7 +339,22 @@ npm run dev                   # inicia em modo desenvolvimento (http://localhost
 
 ## Autenticação
 
-As APIs administrativas exigem **JWT** no header `Authorization: Bearer <token>`.
+As rotas protegidas exigem **JWT HS256** no header `Authorization: Bearer <token>`. Há dois
+portadores, verificados pelo mesmo middleware e distinguidos pela claim `papel`:
+
+| Papel | Quem emite | Claims | Acesso |
+| --- | --- | --- | --- |
+| `admin` | `POST /auth/login` desta API (e-mail/senha) | `sub` (id do usuário), `nome`, `email`, `papel`, `exp` | Todas as rotas administrativas |
+| `cliente` | `POST /auth/cpf` da Function [`oficina-auth-lambda`](https://github.com/Fabio-GST/oficina-auth-lambda), pelo API Gateway | `sub` (id do cliente), `cpf`, `papel`, `exp` | `GET /me` e, nas próximas etapas, as rotas do próprio cliente |
+
+Um token de cliente em rota administrativa recebe **403** (`ACESSO_NEGADO`); token ausente,
+inválido, expirado ou sem `papel` recebe **401**. O contrato das claims com a Function é
+garantido pelo teste [`tests/unit/contrato-jwt.spec.ts`](./tests/unit/contrato-jwt.spec.ts):
+`JWT_SECRET` e algoritmo precisam ser idênticos nos dois repositórios.
+
+Clientes têm o campo **`ativo`** (`PUT /customers/:id` com `{"ativo": false}` inativa): a
+Function recusa o login de cliente inativo. O seeder cria clientes de demonstração com CPF
+válido (`111.444.777-35` e `529.982.247-25` ativos; `123.456.789-09` inativo).
 
 **Administrador inicial** (criado pelo seeder):
 
@@ -261,7 +369,8 @@ curl -X POST http://localhost:3333/auth/login \
   -d '{"email":"admin@oficina.com","senha":"admin12345"}'
 ```
 
-> A consulta pública de andamento da OS (`GET /work-orders/:id/tracking`) **não** exige token.
+> A consulta pública de andamento da OS (`GET /work-orders/:id/tracking`) e o healthcheck
+> (`/health`, `/health/ready`) **não** exigem token.
 
 ---
 
@@ -273,9 +382,11 @@ curl -X POST http://localhost:3333/auth/login \
 
 | Método | Rota                              | Auth | Descrição                             |
 | ------ | --------------------------------- | ---- | ------------------------------------- |
-| POST   | `/auth/login`                     | —    | Autentica e retorna o JWT             |
+| GET    | `/health`                         | —    | Liveness                              |
+| GET    | `/health/ready`                   | —    | Readiness (consulta o banco)          |
+| POST   | `/auth/login`                     | —    | Autentica o admin e retorna o JWT     |
 | POST   | `/auth/register`                  | JWT  | Cadastra novo administrador           |
-| GET    | `/me`                             | JWT  | Dados do usuário autenticado          |
+| GET    | `/me`                             | JWT* | Claims do portador (admin ou cliente) |
 | CRUD   | `/customers`                      | JWT  | Clientes                              |
 | GET    | `/customers/by-document/:doc`     | JWT  | Identifica cliente por CPF/CNPJ       |
 | CRUD   | `/vehicles`                       | JWT  | Veículos (`?clienteId=` filtra)       |
@@ -313,40 +424,55 @@ curl -X POST http://localhost:3333/auth/login \
 | GET    | `/work-orders/:id/tracking`       | —    | Acompanhamento público da OS          |
 | GET    | `/metrics/average-execution-time` | JWT  | Tempo médio de execução das OS        |
 
+`JWT` = exige papel `admin`; `JWT*` = qualquer portador válido (admin ou cliente).
+
+---
+
+## Observabilidade: New Relic, correlação e healthcheck
+
+Plataforma: **New Relic** ([RFC 0004](./docs/rfc/0004-observabilidade.md)). Dashboards
+importáveis, consultas NRQL e as condições de alerta estão em
+[`docs/observabilidade/`](./docs/observabilidade/README.md).
+
+- **APM**: o agente `newrelic` é carregado antes da aplicação
+  (`NODE_OPTIONS="-r newrelic --import newrelic/esm-loader.mjs"` no ConfigMap) com a configuração
+  de [`newrelic.cjs`](./newrelic.cjs): app `oficina-api-<amb>` (`NEW_RELIC_APP_NAME`) e traces
+  distribuídos. Sem `NEW_RELIC_LICENSE_KEY` (local e testes) o agente **não inicia**.
+- **Eventos de negócio** (porta `Telemetria`, no-op nos testes): `OrdemServicoCriada` ao abrir a
+  OS, `OrdemServicoMudouStatus { de, para, duracaoMs }` a cada transição (derivado de
+  `historico_status_os`) e `IntegracaoFalhou { integracao: email | webhook, erro }` quando o
+  SMTP ou o webhook de orçamento falham — publicados pelas Políticas e adaptadores existentes.
+- **Logs com `trace.id`**: `@newrelic/pino-enricher` acrescenta `trace.id`/`span.id` às linhas JSON
+  do pino, coletadas pelo `nri-bundle` do cluster (repo `oficina-infra-k8s`).
+
+- **`x-request-id`**: cada requisição recebe um id de correlação. Se o header vier do API
+  Gateway (ou de qualquer cliente) ele é reaproveitado; caso contrário a API gera um UUID. O id
+  vai em **todos os logs da requisição** (child logger com `request_id`) e volta no header
+  `x-request-id` da resposta, inclusive em erros.
+- **Log estruturado por requisição** (JSON em produção, via pino): `metodo`, `rota`, `status`,
+  `duracaoMs`, `usuarioId` e `papel`.
+- **Healthcheck**: `GET /health` (liveness — o processo responde) e `GET /health/ready`
+  (readiness — executa `select 1` no banco; `503` se o RDS estiver inacessível). O Deployment
+  usa um em cada probe, para o pod só receber tráfego quando consegue falar com o banco.
+
 ---
 
 ## Deploy em Kubernetes
 
-Os manifestos estão em [`/k8s`](./k8s) (namespace, ConfigMap, Secret modelo, Deployment,
-Service, HPA, MySQL e Job de migração). Resumo — o passo a passo completo, incluindo o
-metrics-server exigido pelo HPA, está em [`k8s/README.md`](./k8s/README.md):
+Os manifestos estão em [`/k8s`](./k8s) com **Kustomize**: `base/` (ConfigMap, Deployment,
+Service `LoadBalancer` com NLB interno, HPA e Job de migração) e `overlays/hml` e
+`overlays/prod` (namespace, réplicas, nível de log e tag da imagem). O `Secret oficina-secrets`
+não é versionado — o CD o monta a partir do Secrets Manager. Passo a passo manual, validação
+local e demonstração do HPA em [`k8s/README.md`](./k8s/README.md):
 
 ```bash
-kubectl apply -f k8s/namespace.yaml -f k8s/configmap.yaml
-cp k8s/secret.example.yaml k8s/secret.yaml   # troque os valores
-kubectl apply -f k8s/secret.yaml
-kubectl apply -f k8s/mysql.yaml              # pule se o MySQL veio do Terraform
-kubectl apply -f k8s/migration-job.yaml -f k8s/deployment.yaml -f k8s/service.yaml -f k8s/hpa.yaml
+kubectl kustomize k8s/overlays/hml | kubectl apply -f -
 ```
 
-No pipeline de **CD** (`.github/workflows/cd.yml`), esses mesmos manifestos são aplicados
-automaticamente após o push da imagem no GHCR.
-
----
-
-## Provisionamento com Terraform (IaC)
-
-Os scripts estão em [`/infra`](./infra) e provisionam o cluster **kind** local, o namespace
-`oficina`, o Secret da aplicação e o **MySQL 8** (StatefulSet com volume persistente). Recursos
-criados e detalhes em [`infra/README.md`](./infra/README.md):
-
-```bash
-cd infra
-cp terraform.tfvars.example terraform.tfvars   # troque os valores
-terraform init
-terraform plan
-terraform apply
-```
+O cluster, os namespaces e o metrics-server vêm do repositório
+[`oficina-infra-k8s`](https://github.com/Fabio-GST/oficina-infra-k8s); o banco do
+[`oficina-infra-db`](https://github.com/Fabio-GST/oficina-infra-db). Para desenvolvimento local
+continue usando o `docker compose up` (MySQL local).
 
 ---
 
@@ -408,7 +534,10 @@ npm run sonar                   # roda o scanner
 
 ## Segurança
 
-- Autenticação **JWT** nas APIs administrativas.
+- Autenticação **JWT** (HS256) com autorização por **papel** (`admin`/`cliente`); rotas
+  administrativas só com `admin`.
+- Segredos fora do git: credenciais do banco no **Secrets Manager**, chaves da aplicação nos
+  secrets do GitHub por ambiente; o pipeline monta o Secret do Kubernetes a cada deploy.
 - Validação de entrada com **VineJS** e validação de **dados sensíveis** no domínio
   (dígitos verificadores de **CPF/CNPJ**, formato de **placa**).
 - Senhas armazenadas com **hash** (scrypt, via serviço de hash do AdonisJS).

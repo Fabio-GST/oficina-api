@@ -14,5 +14,6 @@ export const atualizarClienteValidator = vine.compile(
     nome: vine.string().trim().minLength(2).maxLength(120).optional(),
     telefone: vine.string().trim().maxLength(20).nullable().optional(),
     email: vine.string().trim().email().nullable().optional(),
+    ativo: vine.boolean().optional(),
   })
 )

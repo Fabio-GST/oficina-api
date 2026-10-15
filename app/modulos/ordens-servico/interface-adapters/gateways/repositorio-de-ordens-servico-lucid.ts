@@ -84,4 +84,13 @@ export class RepositorioDeOrdensServicoLucid implements RepositorioDeOrdensServi
       .orderBy('created_at', 'desc')
     return models.map(MapeadorDeOrdemServico.paraDominio)
   }
+
+  async listarPorCliente(clienteId: string): Promise<OrdemServico[]> {
+    const models = await OrdemServicoModel.query(opcoesDeCliente())
+      .where('cliente_id', clienteId)
+      .preload('itens')
+      .preload('historico', (q) => q.orderBy('ocorrido_em', 'asc'))
+      .orderBy('created_at', 'desc')
+    return models.map(MapeadorDeOrdemServico.paraDominio)
+  }
 }

@@ -12,6 +12,7 @@ const MAPA: Record<string, number> = {
   RECURSO_NAO_ENCONTRADO: 404,
   CONFLITO_DE_RECURSO: 409,
   NAO_AUTENTICADO: 401,
+  ACESSO_NEGADO: 403,
 }
 
 export function statusHttpDoErro(erro: ErroDeDominio): number {

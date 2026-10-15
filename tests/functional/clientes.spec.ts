@@ -39,6 +39,24 @@ test.group('HTTP Clientes', (group) => {
     removido.assertStatus(204)
   })
 
+  test('cliente nasce ativo e pode ser inativado pelo PUT', async ({ client, assert }) => {
+    const { autenticar } = await logarComoAdmin(client)
+    const criado = await autenticar(
+      client.post('/customers').json({ nome: 'Carlos', documento: gerarCpf() })
+    )
+    criado.assertStatus(201)
+    assert.isTrue(criado.body().ativo)
+
+    const inativado = await autenticar(
+      client.put(`/customers/${criado.body().id}`).json({ ativo: false })
+    )
+    inativado.assertStatus(200)
+    assert.isFalse(inativado.body().ativo)
+
+    const show = await autenticar(client.get(`/customers/${criado.body().id}`))
+    assert.isFalse(show.body().ativo)
+  })
+
   test('rejeita payload inválido com 422', async ({ client }) => {
     const { autenticar } = await logarComoAdmin(client)
     const r = await autenticar(client.post('/customers').json({ nome: 'x', documento: '123' }))

@@ -1,10 +1,9 @@
-# Job de migração do banco: roda a cada deploy (o CD deleta o Job anterior e
-# reaplica). Usa a mesma imagem da API.
+# Job de migração do banco (RDS): roda a cada deploy — o CD remove o Job
+# anterior e reaplica. Usa a mesma imagem e o mesmo Secret da API.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: oficina-migracao
-  namespace: oficina
 spec:
   backoffLimit: 3
   ttlSecondsAfterFinished: 600
@@ -24,6 +23,10 @@ spec:
                 name: oficina-config
             - secretRef:
                 name: oficina-secrets
+          # O Job é efêmero: não vale a pena registrá-lo como app no New Relic.
+          env:
+            - name: NEW_RELIC_ENABLED
+              value: 'false'
           resources:
             requests:
               cpu: 100m
@@ -31,3 +34,7 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false

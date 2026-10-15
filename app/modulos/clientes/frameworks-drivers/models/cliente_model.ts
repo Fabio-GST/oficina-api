@@ -23,6 +23,9 @@ export default class ClienteModel extends BaseModel {
   @column()
   declare email: string | null
 
+  @column()
+  declare ativo: boolean
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
