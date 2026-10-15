@@ -50,16 +50,13 @@ export default class AutenticacaoController {
   /**
    * @me
    * @tag Autenticação
-   * @summary Retorna o Usuário autenticado
-   * @description Consulta os dados do **Usuario** vinculado ao JWT informado no header Authorization.
-   * @responseBody 200 - {"id":"uuid","nome":"João","email":"joao@oficina.com"} - Usuário autenticado
+   * @summary Retorna o portador do token autenticado
+   * @description Devolve as claims do JWT informado no header Authorization: administrador (`papel: admin`, com nome e e-mail) ou cliente autenticado por CPF (`papel: cliente`, com cpf).
+   * @responseBody 200 - {"id":"uuid","papel":"admin","nome":"João","email":"joao@oficina.com"} - Portador autenticado
    * @responseBody 401 - {"erro":{"codigo":"NAO_AUTENTICADO","mensagem":"Token inválido ou expirado."}} - Token inválido
    */
   async me({ usuarioAutenticado }: HttpContext) {
-    return {
-      id: usuarioAutenticado!.sub,
-      nome: usuarioAutenticado!.nome,
-      email: usuarioAutenticado!.email,
-    }
+    const { sub, papel, nome, email, cpf } = usuarioAutenticado!
+    return { id: sub, papel, nome, email, cpf }
   }
 }

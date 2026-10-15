@@ -8,6 +8,7 @@ export interface EntradaAtualizarCliente {
   nome?: string
   telefone?: string | null
   email?: string | null
+  ativo?: boolean
 }
 
 /** Atualiza os dados cadastrais de um cliente (documento é imutável). */
@@ -19,7 +20,12 @@ export class AtualizarCliente implements CasoDeUso<EntradaAtualizarCliente, Clie
     if (!cliente) {
       throw new RecursoNaoEncontrado('Cliente', entrada.id)
     }
-    cliente.atualizar({ nome: entrada.nome, telefone: entrada.telefone, email: entrada.email })
+    cliente.atualizar({
+      nome: entrada.nome,
+      telefone: entrada.telefone,
+      email: entrada.email,
+      ativo: entrada.ativo,
+    })
     await this.repositorio.salvar(cliente)
     return paraDTO(cliente)
   }

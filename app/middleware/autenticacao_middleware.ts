@@ -5,9 +5,10 @@ import type { ConteudoAutenticado } from '#shared/use-cases/emissor-de-token'
 import { NaoAutenticado } from '#shared/entities/erros'
 
 /**
- * Protege rotas administrativas exigindo um JWT válido no header
- * `Authorization: Bearer <token>`. O conteúdo do token é disponibilizado em
- * `ctx.usuarioAutenticado`.
+ * Exige um JWT válido no header `Authorization: Bearer <token>` — do
+ * administrador (emitido por esta API) ou do cliente (emitido pela Function
+ * de autenticação por CPF). O conteúdo do token fica em `ctx.usuarioAutenticado`;
+ * a autorização por papel é feita pelo `PapelMiddleware`.
  */
 export default class AutenticacaoMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {

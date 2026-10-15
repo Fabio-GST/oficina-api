@@ -33,6 +33,7 @@ export class Autenticar implements CasoDeUso<EntradaAutenticar, SaidaAutenticar>
 
     const token = this.emissor.emitir({
       sub: usuario.id,
+      papel: 'admin',
       nome: usuario.nome,
       email: usuario.email.valor,
     })

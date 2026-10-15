@@ -7,6 +7,7 @@ export interface ClienteDTO {
   tipoDocumento: 'CPF' | 'CNPJ'
   telefone: string | null
   email: string | null
+  ativo: boolean
 }
 
 export function paraDTO(cliente: Cliente): ClienteDTO {
@@ -17,5 +18,6 @@ export function paraDTO(cliente: Cliente): ClienteDTO {
     tipoDocumento: cliente.documento.tipo,
     telefone: cliente.telefone,
     email: cliente.email,
+    ativo: cliente.ativo,
   }
 }

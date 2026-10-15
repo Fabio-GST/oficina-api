@@ -1,10 +1,9 @@
-# Job de migração do banco: roda a cada deploy (o CD deleta o Job anterior e
-# reaplica). Usa a mesma imagem da API.
+# Job de migração do banco (RDS): roda a cada deploy — o CD remove o Job
+# anterior e reaplica. Usa a mesma imagem e o mesmo Secret da API.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: oficina-migracao
-  namespace: oficina
 spec:
   backoffLimit: 3
   ttlSecondsAfterFinished: 600
@@ -31,3 +30,7 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false

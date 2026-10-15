@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oficina-config
+data:
+  LOG_LEVEL: 'debug'
+  NOTIFICACAO_DRIVER: 'log'

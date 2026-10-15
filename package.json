@@ -26,6 +26,7 @@
   "imports": {
     "#exceptions/*": "./app/exceptions/*.js",
     "#middleware/*": "./app/middleware/*.js",
+    "#controllers/*": "./app/controllers/*.js",
     "#providers/*": "./providers/*.js",
     "#database/*": "./database/*.js",
     "#start/*": "./start/*.js",

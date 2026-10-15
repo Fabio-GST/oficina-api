@@ -1,10 +1,10 @@
-# Configuração NÃO sensível da API. Segredos (senhas, chaves, tokens) ficam no
-# Secret (ver secret.example.yaml).
+# Configuração NÃO sensível da API. Conexão com o banco (DB_*), chaves e
+# segredos vêm do Secret `oficina-secrets`, montado pelo CD a partir do AWS
+# Secrets Manager (oficina/<ambiente>/db) e dos secrets do GitHub.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oficina-config
-  namespace: oficina
 data:
   TZ: 'UTC'
   NODE_ENV: 'production'
@@ -12,10 +12,6 @@ data:
   PORT: '3333'
   LOG_LEVEL: 'info'
   DB_CONNECTION: 'mysql'
-  DB_HOST: 'mysql'
-  DB_PORT: '3306'
-  DB_USER: 'root'
-  DB_DATABASE: 'oficina'
   JWT_EXPIRES_IN: '1h'
   # "log" registra as notificações no stdout; "email" envia via SMTP
   # (credenciais no Secret).

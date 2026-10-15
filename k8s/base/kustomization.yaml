@@ -1,0 +1,17 @@
+# Base comum aos ambientes. O namespace e a tag da imagem são definidos nos
+# overlays (k8s/overlays/hml e k8s/overlays/prod); o Secret `oficina-secrets`
+# é criado pelo pipeline de CD a partir do Secrets Manager (não versionado).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/part-of: oficina
+
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - migration-job.yaml

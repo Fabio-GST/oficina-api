@@ -10,6 +10,8 @@ export const MapeadorDeCliente = {
       documento: Documento.criar(model.documento),
       telefone: model.telefone,
       email: model.email,
+      // SQLite devolve 0/1; MySQL devolve boolean.
+      ativo: Boolean(model.ativo),
     })
   },
 
@@ -21,6 +23,7 @@ export const MapeadorDeCliente = {
       tipoDocumento: cliente.documento.tipo,
       telefone: cliente.telefone,
       email: cliente.email,
+      ativo: cliente.ativo,
     }
   },
 }

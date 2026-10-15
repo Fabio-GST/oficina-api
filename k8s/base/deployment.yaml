@@ -1,10 +1,9 @@
-# API da oficina. A imagem é publicada pelo pipeline de CD no GHCR — ajuste o
-# campo `image` para o seu usuário/organização do GitHub.
+# API da oficina. A imagem é publicada pelo CD no GHCR; a tag é fixada pelo
+# overlay/pipeline (`kustomize edit set image`).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: oficina-api
-  namespace: oficina
   labels:
     app: oficina-api
 spec:
@@ -22,27 +21,32 @@ spec:
           image: ghcr.io/fabio-gst/oficina-api:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3333
+            - name: http
+              containerPort: 3333
           envFrom:
             - configMapRef:
                 name: oficina-config
             - secretRef:
                 name: oficina-secrets
+          # Readiness consulta o banco (RDS): o pod só recebe tráfego do NLB
+          # quando consegue falar com o MySQL. Liveness é só o processo.
           readinessProbe:
             httpGet:
-              path: /health
-              port: 3333
+              path: /health/ready
+              port: http
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
-              port: 3333
+              port: http
             initialDelaySeconds: 15
             periodSeconds: 20
             timeoutSeconds: 3
-          # Requests/limits são OBRIGATÓRIOS para o HPA calcular a utilização.
+          # Requests/limits são OBRIGATÓRIOS para o HPA calcular a utilização e
+          # para a ResourceQuota do namespace (criada pelo repo oficina-infra-k8s).
           resources:
             requests:
               cpu: 100m

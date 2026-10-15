@@ -42,6 +42,15 @@ export class ConflitoDeRecurso extends ErroDeDominio {
   readonly codigo = 'CONFLITO_DE_RECURSO'
 }
 
+/** Autenticado, mas sem permissão para o recurso (papel insuficiente). */
+export class AcessoNegado extends ErroDeDominio {
+  readonly codigo = 'ACESSO_NEGADO'
+
+  constructor(mensagem = 'Acesso negado.') {
+    super(mensagem)
+  }
+}
+
 /** Falha de autenticação. */
 export class NaoAutenticado extends ErroDeDominio {
   readonly codigo = 'NAO_AUTENTICADO'

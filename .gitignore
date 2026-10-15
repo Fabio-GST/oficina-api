@@ -16,13 +16,6 @@ coverage
 .env.local
 .env.production.local
 .env.development.local
-k8s/secret.yaml
-
-# Terraform
-infra/.terraform
-infra/*.tfstate
-infra/*.tfstate.*
-infra/*.tfvars
 
 # Frontend assets compiled code
 public/assets
@@ -38,6 +31,3 @@ yarn-error.log
 
 # Platform specific
 .DS_Store
-
-# kubeconfig gerado pelo Terraform (credenciais do cluster)
-infra/oficina-config

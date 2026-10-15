@@ -1,10 +1,9 @@
 # Escala a API conforme o consumo de CPU/memória dos pods.
-# Requer o metrics-server instalado no cluster (ver k8s/README.md).
+# Requer o metrics-server (instalado pelo repo oficina-infra-k8s).
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: oficina-api
-  namespace: oficina
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
