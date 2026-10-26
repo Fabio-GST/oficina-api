@@ -217,7 +217,7 @@ Para regerar a spec após mudar rotas: suba a aplicação e salve a resposta de 
 ## Vídeo demonstrativo
 
 - **Fase 3** (até 15 min — autenticação por CPF, pipeline, deploy, APIs protegidas, dashboard,
-  logs e traces): _link a publicar após a gravação_ — roteiro em
+  logs e traces): **[assistir ao vídeo](https://drive.google.com/file/d/1RDWC32xFUaCeHpzbTpB_Rg1yz7Fi58Ie/view?usp=sharing)** — roteiro em
   [`docs/roteiro-video-fase-3.md`](./docs/roteiro-video-fase-3.md).
 - **Fase 2** (12min20s — deploy, CI/CD, consumo das APIs e escalabilidade automática):
   **[assistir ao vídeo](https://drive.google.com/file/d/1wLm3q3dAi6ljX0bM3NB71IYAEVS5qotA/view?usp=sharing)**.
