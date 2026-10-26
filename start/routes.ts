@@ -32,7 +32,7 @@ const PagamentosController = () =>
 
 const HealthController = () => import('#controllers/health_controller')
 
-router.get('/', async () => ({ servico: 'API Oficina Mecânica', documentacao: '/docs' }))
+router.get('/', async () => ({ servico: 'API Oficina Mecânica — Fase 3', documentacao: '/docs' }))
 
 /*
 | Healthcheck: `/health` é o liveness (processo responde); `/health/ready` é o
