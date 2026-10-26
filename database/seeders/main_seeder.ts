@@ -9,7 +9,7 @@ import ClienteModel from '#modulos/clientes/frameworks-drivers/models/cliente_mo
 export default class extends BaseSeeder {
   async run() {
     // Administrador inicial (credenciais para acesso às APIs administrativas).
-    await UsuarioModel.updateOrCreate(
+    await UsuarioModel.firstOrCreate(
       { email: 'admin@oficina.com' },
       {
         id: randomUUID(),
@@ -26,7 +26,7 @@ export default class extends BaseSeeder {
       { nome: 'Revisão completa', descricao: 'Revisão geral do veículo', precoCentavos: 35000 },
     ]
     for (const servico of servicos) {
-      await ServicoModel.updateOrCreate({ nome: servico.nome }, { id: randomUUID(), ...servico })
+      await ServicoModel.firstOrCreate({ nome: servico.nome }, { id: randomUUID(), ...servico })
     }
 
     // Clientes de demonstração (CPFs válidos pelos dígitos verificadores) para
@@ -38,7 +38,7 @@ export default class extends BaseSeeder {
       { nome: 'Carlos Inativo', documento: '12345678909', email: null, ativo: false },
     ]
     for (const cliente of clientes) {
-      await ClienteModel.updateOrCreate(
+      await ClienteModel.firstOrCreate(
         { documento: cliente.documento },
         { id: randomUUID(), tipoDocumento: 'CPF', telefone: null, ...cliente }
       )
@@ -51,7 +51,7 @@ export default class extends BaseSeeder {
       { nome: 'Pastilha de freio', precoCentavos: 8000, quantidadeEstoque: 20 },
     ]
     for (const peca of pecas) {
-      await PecaModel.updateOrCreate(
+      await PecaModel.firstOrCreate(
         { nome: peca.nome },
         { id: randomUUID(), descricao: null, ...peca }
       )
