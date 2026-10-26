@@ -27,6 +27,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build --chown=node:node /app/build ./
+# Spec OpenAPI versionada: em producao o adonis-autoswagger le swagger.json pre-gerado
+# em vez de montar a spec a cada requisicao (sem ele, /swagger responde 500).
+COPY --from=build --chown=node:node /app/docs/openapi.json ./swagger.json
 
 # Processo sem privilégios (o usuário "node" já existe na imagem oficial).
 USER node
